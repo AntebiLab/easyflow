@@ -1,2 +1,2 @@
 
-For more information contact <a href-"mailto:ayaron@weizmann.ac.il"> ayaron@weizmann.ac.il </a>.
+For more information contact [ayaron@weizmann.ac.il](mailto:ayaron@weizmann.ac.il).
