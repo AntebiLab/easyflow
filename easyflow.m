@@ -2547,7 +2547,8 @@ set(fh,'Visible','on');
         %Plot','Contour','Filled Contour'
         %mArgsIn.Display.graph_Yaxis can be 'ylin' or 'ylog'
         %set up the axis for plotting
-        figure;
+        hFig=figure;
+        plottools(hFig);
         cla(gca);
         hold on;
         switch mArgsIn.Display.graph_type
