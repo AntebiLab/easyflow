@@ -1,581 +1,572 @@
 function easyflow(varargin)
-% Easyflow - A GUI for facs data.
-%       easyflow sessionfile
-%       written by Yaron Antebi
-
-%% General Info
-% it creates a data structure, mArgs with the following fields
-%    version - double - the version
-%    TubeDB - array of structures Tubes information.
-%       fcsfile - structure containing the parsed fcsfile
-%       Tubename - 1x1 cell containing a string with the tube name
-%       CompensationMtx
-%       CompensationIndex
-%       CompensationPrm
-%       parname
-%       parsymbol
-%       tubepath
-%       tubefile
-%       compdata - (num of cell X num of colors) Array of compensated data
-%    Handles - all the gui handles.
-%       GateList - handle to the uibuttongroup of the gates
-%    GraphDB
-%       Name
-%       Data - String - name of the data tube
-%       Ctrl - String - name of the control tube
-%       Color - String - name of color for x axis
-%       Color2 - String - name of color for y axis
-%       RemoveCtrl - integer
-%       DataDeconv
-%       Gates
-%       Stat - structure to hold statistics
-%           quad - double array of length 2 with the position of the quadrants
-%           quadp - double array of length 4 with the percentage of cells in each quad
-%       plotdata - array of plotted data, [y(:), x(:)]
-%       PlotColor - [r g b] - the color for the graph
-%       Display
-%           Changed - 0 or 1 - should i save the display in the graphdb
-%       gatedindex - logical for the events that pass the combined gates
-%       gatedindexctrl - logical for the events that pass the gates in the control tube
-%       fit - 4x1 cell - cell array with 4 values. results of a fit operation (cfit), goodness of fit (structure), axis scaling, axis scaling param.
-%    GatesDB
-%       getvarname(tube)
-%          gatename - cell array of {[gate_definition] [logical] [color1/defining element] [color2/type] }
-%    Display - parameters for the display
-%       GraphColor: [7x3 double]
-%       graph_type: 'Dot Plot'
-%       graph_type_Radio: 4
-%       graph_Xaxis: 'logicle'
-%       graph_Xaxis_param: [-1000 1000000 0.0251188643150958]
-%       graph_Xaxis_Radio: 1
-%       graph_Yaxis: 'ylin'
-%       graph_Yaxis_param: [0 1000000 1]
-%       graph_Yaxis_Radio: 4
-%       Changed - 0 or 1 - should i save the display in the graphdb
-%       histnormalize: 'Total'
-%    TubeNames - cell array of strings containing the name of all tubes.
-%                with 'None' as the first.
-%    Statistics - parameters to do with statistics
-%       ShowInStatView=logicals indicating which tests to do
-%    copy
-%    curGraph
-%    DBFile - data for saving things
-%       Name
-%       Path - String - path where to open file dialogs
-%       RootFolder - String - path to a base folder for relative paths
-%       isChanged - 0,1 - should the file be saved
-%       geom - the geometry of the figure
-%           Graphsize - the size of the Graph pane
-%           Gatesize - the size of the Gates pane
-%           
+%EASYFLOW - A GUI for facs data.
+%   EASYFLOW()
+%   EASYFLOW
+%   Opens up a new empty easyflow session.
 %
-%%  Versions:
-%TODOLIST:
-%   edit gates
-%   load mqd files
-%   DBFile.ischanged=0 when open new file
-curversion=3.17;
-versiondate='June 12, 2017';
-%  V0.3.17
-%         moved to github
-%  V0.3.16
-%         BUGFIX: hyperbolic/logicle ticks were wrong.
-%         BUGFIX: initially the Xaxis shows log and plot logicle. fixed.
-%         open new file in a new window
-%         automatic compensation matrix
-%  V0.3.15 rename tubes using excel file
-%         auto load all tubes into graphs
-%         auto rename tube if already existing
-%         prettify when drawing to figure
-%         make the xticklabel 10^n which works well with R2015
-%         fix non MACSQuant bug
-%         automatic range for x,y axes
-%  V0.3.1 - small bug fixes
-%         - if data section size is >8 digits, look for the location in the
-%         BEGINDATA ENDDATA parameters
-%  V0.3.0 add calculated parameters
-%         create 2d gates using selected contour
-%         rename mArgs to mArgsIn inside nested functions, to limit their
-%         scope
-%  V0.2.9 rearange the gates as logical masks
-%         make gates show the real situation with many selected graphs
-%         add statistics options
-%         save sessions as efl files
-%         open session from command line
-%         installation package
-%         logical operations on gates
-%         faster 2d gate filtering
-%         plotdata is deleted when graph is not shown
-%         artifact gate - to remove statisticaly different time areas
-%         can open more general fcs files (integer data, with incorrect data section length)
-%         2d-gate can now be any polygon, not just convex
-%         import/export compensation matrix
-%         drag and change graphlist width
-%  V0.2.8 can do fits
-%         stat view uses uitable
-%         control the parameters of the y axis
-%         control the smoothing of histograms
-%         export gated data of selected graphs
-%         name changed to easyflow and files joined
-%  V0.2.7 MakeGlobal in the gates menu was removed
-%         Gating is done when the gate is chosen rather than when drawing
-%         use fcsload to load files
-%         tube menu: rename, save, remove
-%         compensation can be done in full
-%  V0.2.6 2d with colors
-%         select color for plotting graphs
-%         ctrl-a is auto rename of selected graphs using tubename
-%  V0.2.5 ask to save before quit
-%         open tubes
-%         curGraph is the list of ALL selected graphs
-%         color is saved as a string and not as an index
-%         each graph has its own display properties
-%         gate remembers the color not the number.
-%         add gate to all selected tubes
-%  V0.2.4 gates are checkboxes
-%         gateedit
-%         show percentage of gated events
-%         export statistics to excel
-%         add statistical tests
-%         set quadrants in 2d display
-%  V0.2.3 tube specific one dimensional gates, for each graph.
-%         add button copies the current graph
-%         know to use the compensations
-%         change gates to global
-%         apply only lymphogate on isotype
-%  V0.2.2 changed the structure of mArgs.
-%         save/load files
-%
+%   EASYFLOW('session_filename')
+%   EASYFLOW session_filename
+%   Opens up the session saved in session_filename.
 
-%% main code
-%  Initialization tasks
+%Todos
+% gate edit: change gate name
+% gate edit: move enitre gate (with ctrl)
+% remove the use of fh in functions
+% remove the use of mArgs
 
-%  Initialize input parameters
+%written by Yaron Antebi
+curversion=3.20;
+versiondate='Feb 02, 2020';
+
+% Initialize 
+fh = init_gui();
+
+% Check arguments
 if nargin>1
     error('Wrong number of arguments');
-end
-% Initialize data structures
-mArgs.TubeDB=struct('fcsfile',{},...
-    'Tubename',{},...
-    'tubepath',{},...
-    'tubefile',{},...
-    'parname',{},...
-    'parsymbol',{},...
-    'CompensationPrm',{},...
-    'CompensationMtx',{},...
-    'CompensationIndex',{},...
-    'compdata',{});
-mArgs.GraphDB=[];
-mArgs.version=curversion;
-mArgs.TubeNames={'None'};
-mArgs.Display.GraphColor=[0,   0,   1;
-    0,   0.5, 0;
-    1,   0,   0;
-    0,   0.75,0.75;
-    0.75,0,   0.75;
-    0.75,0.75,0;
-    0.25,0.25,0.25];
-mArgs.Display.graph_type='Histogram';
-mArgs.Display.graph_type_Radio=5;
-mArgs.Display.graph_Xaxis='log';
-mArgs.Display.graph_Xaxis_param=[0 Inf 1];
-mArgs.Display.graph_Xaxis_Radio=3;
-mArgs.Display.graph_Yaxis='ylin';
-mArgs.Display.graph_Yaxis_param=[1];
-mArgs.Display.graph_Yaxis_Radio=4;
-mArgs.Display.smoothprm=100;
-mArgs.Handles.DrawFcn=@DrawGraphs;
-mArgs.Handles.UpdateGateListFcn=@UpdateGateList;
-mArgs.Handles.CalculateGatedData=@CalculateGatedData;
-mArgs.Handles.RecalcGateLogicalMask=@RecalcGateLogicalMask;
-mArgs.DBFile.Path=pwd;
-mArgs.Statistics.ShowInStatView=[true(1,5),false(1,4)];
-%  the geometry of the figure 
-mArgs.DBFile.geom.Graphsize=100;
-mArgs.DBFile.geom.Gatesize=120;
-
-%%  Construct the figure
-scrsz=get(0,'ScreenSize');
-guisize=700;
-fh=figure('Position',[(scrsz(3)-800)/2,(scrsz(4)-700)/2,800,700],...
-    'MenuBar','none',...
-    'Name','EasyFlow - FACS Analysis Tool',...
-    'NumberTitle','off',...
-    'Visible','off',...
-    'ResizeFcn',{@fhResizeFcn},...
-    'KeyPressFcn',{@fhKeyPressFcn},...
-    'WindowButtonDownFcn',@ResizeFcn,...
-    'WindowButtonMotionFcn',@fhMotionFcn);
-set(fh,'CloseRequestFcn',{@fhClose,fh});
-mArgs.Handles.fh=fh;
-guidata(fh,mArgs);
-%  Construct the components
-GraphList=uicontrol(fh,...
-    'Style','listbox',...
-    'Position',[0 0 100 guisize-30],...
-    'Max',2,...
-    'Tag','GraphList',...
-    'Value',[],...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@GraphListCallback,fh});
-AddBtn=uicontrol(fh,...
-    'Style','pushbutton',...
-    'Position',[0 guisize-30 50 30],...
-    'String','Add',...
-    'Tag','AddBtn',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@AddBtnCallback,fh});
-DelBtn=uicontrol(fh,...
-    'Style','pushbutton',...
-    'Position',[50 guisize-30 50 30],...
-    'String','Del',...
-    'Tag','DelBtn',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@DelBtnCallback,fh});
-TopPanel=uipanel(fh,...
-    'Units','pixels',...
-    'Position',[100,guisize-100,guisize-200,100],...
-    'Tag','TopPanel',...
-    'CreateFcn',{@GeneralCreateFcn,fh});
-GateList=uibuttongroup(...
-    'Units','pixels',...
-    'Position',[guisize-120 0 120 guisize],...
-    'Tag','GateList',...
-    'CreateFcn',{@GeneralCreateFcn,fh});
-ax=axes('Parent',fh,...
-    'Units','pixels',...
-    'OuterPosition',[100,0,guisize-100,guisize-100],...
-    'Tag','ax',...
-    'CreateFcn',{@GeneralCreateFcn,fh});
-
-%% Construct components of the top panel
-GraphName=uicontrol(TopPanel,...
-    'Style','edit',...
-    'HorizontalAlignment','left',...
-    'String','GraphName',...
-    'BackgroundColor',[1 1 1],...
-    'Position',[5 75 122 20],...
-    'Tag','GraphName',...
-    'Enable','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@GraphNameCallback,fh});
-uicontrol(TopPanel,...
-    'Style','text',...
-    'HorizontalAlignment','left',...
-    'String','Data:',...
-    'Position',[5 50 122 20]);
-TubePUM=uicontrol(TopPanel,...
-    'Style','popupmenu',...
-    'Position',[5 35 122 20],...
-    'String',' ',...
-    'BackgroundColor',[1 1 1],...
-    'Tag','TubePUM',...
-    'Enable','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@TubePUMCallback,fh});
-uicontrol(TopPanel,...
-    'Style','text',...
-    'HorizontalAlignment','left',...
-    'String','Control:',...
-    'Visible','off',...
-    'Position',[137 50 122 20]);
-CtrlPUM=uicontrol(TopPanel,...
-    'Style','popupmenu',...
-    'Position',[137 35 122 20],...
-    'String',' ',...
-    'BackgroundColor',[1 1 1],...
-    'Tag','CtrlPUM',...
-    'Enable','off',...
-    'Visible','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@CtrlPUMCallback,fh});
-uicontrol(TopPanel,...
-    'Style','text',...
-    'HorizontalAlignment','left',...
-    'String','X Axis:',...
-    'Position',[269-132 50 122 20]);
-ColorPUM=uicontrol(TopPanel,...
-    'Style','popupmenu',...
-    'Position',[269-132 35 122 20],...
-    'String',' ',...
-    'BackgroundColor',[1 1 1],...
-    'Tag','ColorPUM',...
-    'Enable','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@ColorPUMCallback,fh});
-uicontrol(TopPanel,...
-    'Style','text',...
-    'HorizontalAlignment','left',...
-    'String','Y Axis:',...
-    'Position',[401-132 50 122 20]);
-Color2PUM=uicontrol(TopPanel,...
-    'Style','popupmenu',...
-    'Position',[401-132 35 122 20],...
-    'String',' ',...
-    'BackgroundColor',[1 1 1],...
-    'Tag','Color2PUM',...
-    'Enable','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@Color2PUMCallback,fh});
-cicon(:,:,1)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
-cicon(:,:,2)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
-cicon(:,:,3)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
-ColorBtn=uicontrol(TopPanel,...
-    'Style','pushbutton',...
-    'Position',[543-132 35 30 30],...
-    'Cdata',cicon,...
-    'Tag','ColorBtn',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Enable','off',...
-    'Callback',{@ColorBtnCallback,fh});
-RemoveCtrlCB=uicontrol(TopPanel,...
-    'Style','checkbox',...
-    'Position',[5 10 122 20],...
-    'String','Remove Control',...
-    'Tag','RemoveCtrlCB',...
-    'Enable','off',...
-    'Visible','off',...
-    'CreateFcn',{@GeneralCreateFcn,fh},...
-    'Callback',{@RemoveCtrlCBCallback,fh});
-%%  Constract the menu
-MenuFile = uimenu(fh,...
-    'Label','File',...
-    'Callback',{@FileCallback,fh});
-MenuTools = uimenu(fh,...
-    'Label','Tools',...
-    'Callback',{@ToolsCallback});
-MenuView = uimenu(fh,'Label','View');
-MenuHelp = uimenu(fh,'Label','Help');
-%%  FILE menu
-uimenu(MenuFile,...
-    'Label','Open Analysis...',...
-    'Callback',{@FileLoadCallback,fh});
-uimenu(MenuFile,...
-    'Label','Open Samples...',...
-    'Callback',{@SampleLoadCallback,fh});
-uimenu(MenuFile,...
-    'Label','Save',...
-    'Callback',{@FileSaveCallback,fh});
-uimenu(MenuFile,...
-    'Label','Save As...',...
-    'Callback',{@FileSaveAsCallback,fh});
-MenuFileRelpath=uimenu(MenuFile,...
-    'Label','Use Relative Path',...
-    'Callback',{@FileUseRelPath,fh});
-%%  TOOLS menu
-MenuToolsSamples = uimenu(MenuTools,...
-    'Label','Samples',...
-    'Callback',@SampleCallback);
-uimenu(MenuTools,...
-    'Label','Batch...',...
-    'Callback',{@ToolsBatch});
-uimenu(MenuTools,...
-    'Label','Add all tubes',...
-    'Callback',{@ToolsAddall});
-uimenu(MenuTools,...
-    'Label','New Fit',...
-    'Callback',{@ToolsNewFit});
-uimenu(MenuTools,...
-    'Label','Apply Fit',...
-    'Callback',{@ToolsApplyFit});
-uimenu(MenuTools,...
-    'Label','Remove Fit',...
-    'Callback',{@ToolsRemFit});
-uimenu(MenuTools,...
-    'Label','Export Data',...
-    'Callback',{@ToolsExport});
-%%      Samples menu
-uimenu(MenuToolsSamples,...
-    'Label','Save Samples',...
-    'Callback',@TubeSaveCallback);
-uimenu(MenuToolsSamples,...
-    'Label','Remove Samples...',...
-    'Callback',@TubeRemoveCallback);
-uimenu(MenuToolsSamples,...
-    'Label','Rename Samples...',...
-    'Callback',@TubeRenameCallback);
-uimenu(MenuToolsSamples,...
-    'Label','File Rename Samples...',...
-    'Callback',@FileTubeRenameCallback);
-uimenu(MenuToolsSamples,...
-    'Label','Samples parameters...',...
-    'Callback',@TubeShowPrmCallback);
-MenuTubeComp=uimenu(MenuToolsSamples,...
-    'Label','Compensation');
-uimenu(MenuToolsSamples,...
-    'Label','View Parameters...',...
-    'Callback',{@TubePrmCallback,fh});
-uimenu(MenuToolsSamples,...
-    'Label','Add parameter',...
-    'callback',@TubeAddParam);
-%%          Compensation menu
-uimenu(MenuTubeComp,...
-    'Label','Set Compensation...',...
-    'Callback',{@TubeCompCallback,fh});
-%%  VIEW menu
-uimenu(MenuView,...
-    'Label','Stat Window...',...
-    'Callback',{@StatWinCallback,fh});
-uimenu(MenuView,...
-    'Label','SetUp...',...
-    'Callback',{@ViewSetup});
-%%  HELP menu
-uimenu(MenuHelp,...
-    'Label','About...',...
-    'Callback',{@HelpAbout});
-
-
-%% Context menus
-%Gates
-GatesCM = uicontextmenu('Parent',fh,...
-    'Callback',{@MenuGates,fh});
-uimenu(GatesCM,...
-    'Label','Define Lymphogate',...
-    'Callback',{@MenuGatesLGate,fh});
-uimenu(GatesCM,...
-    'Label','Add Gate',...
-    'Callback',{@MenuGatesAddGate,fh});
-uimenu(GatesCM,...
-    'Label','Add Contour Gate',...
-    'Callback',{@MenuGatesAddContourGate,fh});
-uimenu(GatesCM,...
-    'Label','Add Logical Gate',...
-    'Callback',{@MenuGatesAddLogicalGate,fh});
-uimenu(GatesCM,...
-    'Label','Add Artifacts Gate',...
-    'Callback',{@MenuGatesAddArtifactsGate,fh});
-uimenu(GatesCM,...
-    'Label','Edit Gates',...
-    'Callback',{@MenuGatesEditor,fh});
-set(GateList,'UIContextMenu',GatesCM);
-%Display
-axiscontextmenu = uicontextmenu('Parent',fh,...
-    'Callback',{@ACM,fh});
-acmquadmenu=uimenu(axiscontextmenu,...
-    'Label','Quadrants');
-uimenu(acmquadmenu,...
-    'Label','Set Quadrants',...
-    'Callback',{@ACM_setquad,fh});
-uimenu(acmquadmenu,...
-    'Label','Copy Quadrants',...
-    'Callback',{@ACM_cpquad,fh});
-uimenu(acmquadmenu,...
-    'Label','Paste Quadrants',...
-    'Callback',{@ACM_pastequad,fh});
-uimenu(acmquadmenu,...
-    'Label','Remove Quadrants',...
-    'Callback',{@ACM_rmquad,fh});
-uimenu(axiscontextmenu,...
-    'Label','Fix Axis',...
-    'Callback',{@ACM_fixaxis,fh});
-uimenu(axiscontextmenu,...
-    'Label','Draw to Figure',...
-    'Callback',{@ACM_DrawToFigure,fh});
-uimenu(axiscontextmenu,...
-    'Label','Graph Properties...',...
-    'Callback',{@ACM_graphprop,fh});
-set(ax,'UIContextMenu',axiscontextmenu);
-
-%%  Initialization tasks
-%  set the data and ctrl popup menu
-set(TubePUM,'String',mArgs.TubeNames);
-set(mArgs.Handles.CtrlPUM,'String',mArgs.TubeNames);
-%  read the graph list
-if isfield(mArgs.GraphDB,'Name')
-    %if i will ever get here i will know
-    %25/07/2010    List={mArgs.GraphDB.Name};
-    %25/07/2010    set(mArgs.Handles.GraphList,'String',List);
-    msgbox('Thanks for your help. Please tell yaron that you were here.');
-end
-% if input session, load it
-if nargin==1
-    FileLoadCallback([],[],fh,varargin{1});
+elseif nargin==1
+    % Load session
+    SessionLoadCallback(fh,[],varargin{1});
 end
 
-%%  Render GUI visible
+%  Render GUI visible
 set(fh,'Visible','on');
 
-%%  Callbacks for MYGUI.
-    function NullCallback(hObject,eventdata)
+%%  Initialization functions
+    function db=init_efdb()
+        % Initialize data structures
+        % General DB Info
+        % it creates a data structure, mArgs with the following fields
+        %    version - double - the version
+        %    TubeDB - array of structures Tubes information.
+        %       fcsfile - structure containing the parsed fcsfile
+        %       Tubename - 1x1 cell containing a string with the tube name
+        %       CompensationMtx
+        %       CompensationIndex
+        %       CompensationPrm
+        %       parname
+        %       parsymbol
+        %       tubepath
+        %       tubefile
+        %       compdata - (num of cell X num of colors) Array of compensated data
+        %    Handles - all the gui handles.
+        %       GateList - handle to the uibuttongroup of the gates
+        %    GraphDB
+        %       Name
+        %       Data - String - name of the data tube
+        %       Ctrl - String - name of the control tube
+        %       Color - String - name of color for x axis
+        %       Color2 - String - name of color for y axis
+        %       RemoveCtrl - integer
+        %       DataDeconv
+        %       Gates
+        %       Stat - structure to hold statistics
+        %           quad - double array of length 2 with the position of the quadrants
+        %           quadp - double array of length 4 with the percentage of cells in each quad
+        %       plotdata - array of plotted data, [y(:), x(:)]
+        %       PlotColor - [r g b] - the color for the graph
+        %       Display
+        %           Changed - 0 or 1 - should i save the display in the graphdb
+        %       gatedindex - logical for the events that pass the combined gates
+        %       gatedindexctrl - logical for the events that pass the gates in the control tube
+        %       fit - 4x1 cell - cell array with 4 values. results of a fit operation (cfit), goodness of fit (structure), axis scaling, axis scaling param.
+        %    GatesDB
+        %       getvarname(tube)
+        %          gatename - cell array of {[gate_definition] [logical] [color1/defining element] [color2/type] }
+        %    Display - parameters for the display
+        %       GraphColor: [7x3 double]
+        %       graph_type: 'Dot Plot'
+        %       graph_type_Radio: 4
+        %       graph_Xaxis: 'logicle'
+        %       graph_Xaxis_param: [-1000 1000000 0.0251188643150958]
+        %       graph_Xaxis_Radio: 1
+        %       graph_Yaxis: 'ylin'
+        %       graph_Yaxis_param: [0 1000000 1]
+        %       graph_Yaxis_Radio: 4
+        %       Changed - 0 or 1 - should i save the display in the graphdb
+        %       histnormalize: 'Total'
+        %    TubeNames - cell array of strings containing the name of all tubes.
+        %                with 'None' as the first.
+        %    Statistics - parameters to do with statistics
+        %       ShowInStatView=logicals indicating which tests to do
+        %    copy
+        %    curGraph
+        %    DBInfo - data for saving things
+        %       Name
+        %       Path - String - path where to open file dialogs
+        %       RootFolder - String - path to a base folder for relative paths
+        %       isChanged - 0,1 - should the file be saved
+        %       geom - the geometry of the figure
+        %           Graphsize - the size of the Graph pane
+        %           Gatesize - the size of the Gates pane
+        %       enabled_gui - enabled gui components
+        %
+        %
+        
+        db=struct(...
+            'version',curversion,...
+            'TubeDB',[],...
+            'Handles',[],...
+            'GraphDB',[],...
+            'GatesDB',[],...
+            'GatesDBnew',struct(),...
+            'Display',[],...
+            'TubeNames',{'None'},...
+            'Statistics',[],...
+            'copy',[],...
+            'curGraph',[],...
+            'DBInfo',[]...
+            );
+        
+        db.TubeDB=struct(...
+            'fcsfile',{},...
+            'Tubename',{},...
+            'tubepath',{},...
+            'tubefile',{},...
+            'parname',{},...
+            'parsymbol',{},...
+            'CompensationPrm',{},...
+            'CompensationMtx',{},...
+            'CompensationIndex',{},...
+            'compdata',{});
+        
+        db.Display.GraphColor=[0,   0,   1;
+            0,   0.5, 0;
+            1,   0,   0;
+            0,   0.75,0.75;
+            0.75,0,   0.75;
+            0.75,0.75,0;
+            0.25,0.25,0.25];
+        db.Display.graph_type='Histogram';
+        db.Display.graph_type_Radio=5;
+        db.Display.graph_Xaxis='log';
+        db.Display.graph_Xaxis_param=[0 Inf 1];
+        db.Display.graph_Xaxis_Radio=3;
+        db.Display.graph_Yaxis='ylin';
+        db.Display.graph_Yaxis_param=1;
+        db.Display.graph_Yaxis_Radio=4;
+        db.Display.smoothprm=100;
+        
+        db.DBInfo.Path=pwd;
+        db.DBInfo.geom.Graphsize=100;
+        db.DBInfo.geom.Gatesize=120;
+        
+        db.Statistics.ShowInStatView=[true(1,5),false(1,4)];
+    end
+    function fh=init_gui
+        Handles=[];
+        %%  Construct the figure
+        scrsz=get(0,'ScreenSize');
+        guisize=700;
+        Handles.fh=figure('Position',[(scrsz(3)-800)/2,(scrsz(4)-700)/2,800,700],...
+            'MenuBar','none',...
+            'Name','EasyFlow - FACS Analysis Tool',...
+            'NumberTitle','off',...
+            'Visible','off',...
+            'ResizeFcn',{@fhResizeFcn},...
+            'KeyPressFcn',{@fhKeyPressFcn},...
+            'WindowButtonDownFcn',@ResizeFcn,...
+            'WindowButtonMotionFcn',@fhMotionFcn,...
+            'CloseRequestFcn',@fhClose);
+        %%  Construct the UI regions
+        uicontrol(Handles.fh,...
+            'Style','listbox',...
+            'Position',[0 0 100 guisize-30],...
+            'Max',2,...
+            'Tag','GraphList',...
+            'Value',[],...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@GraphListCallback);
+        uicontrol(Handles.fh,...
+            'Style','pushbutton',...
+            'Position',[0 guisize-30 50 30],...
+            'String','Add',...
+            'Tag','AddBtn',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@AddBtnCallback);
+        uicontrol(Handles.fh,...
+            'Style','pushbutton',...
+            'Position',[50 guisize-30 50 30],...
+            'String','Del',...
+            'Tag','DelBtn',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@DelBtnCallback);
+        uipanel(Handles.fh,...
+            'Units','pixels',...
+            'Position',[100,guisize-100,guisize-200,100],...
+            'Tag','TopPanel',...
+            'CreateFcn',@GeneralCreateFcn);
+        uibuttongroup(...
+            'Units','pixels',...
+            'Position',[guisize-120 0 120 guisize],...
+            'Tag','GateList',...
+            'CreateFcn',@GeneralCreateFcn);
+        axes('Parent',Handles.fh,...
+            'Units','pixels',...
+            'OuterPosition',[100,0,guisize-100,guisize-100],...
+            'Tag','ax',...
+            'CreateFcn',@GeneralCreateFcn);
+        %%  Construct the top panel
+        uicontrol(Handles.TopPanel,...
+            'Style','edit',...
+            'HorizontalAlignment','left',...
+            'String','GraphName',...
+            'BackgroundColor',[1 1 1],...
+            'Position',[5 75 122 20],...
+            'Tag','GraphName',...
+            'Enable','off',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@GraphNameCallback);
+        uicontrol(Handles.TopPanel,...
+            'Style','text',...
+            'HorizontalAlignment','left',...
+            'String','Data:',...
+            'Position',[5 50 122 20]);
+        uicontrol(Handles.TopPanel,...
+            'Style','popupmenu',...
+            'Position',[5 35 122 20],...
+            'String',' ',...
+            'BackgroundColor',[1 1 1],...
+            'Tag','TubePUM',...
+            'Enable','off',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@TubePUMCallback);
+        uicontrol(Handles.TopPanel,...
+            'Style','text',...
+            'HorizontalAlignment','left',...
+            'String','Control:',...
+            'Visible','off',...
+            'Position',[137 50 122 20]);
+        uicontrol(Handles.TopPanel,...
+            'Style','text',...
+            'HorizontalAlignment','left',...
+            'String','X Axis:',...
+            'Position',[269-132 50 122 20]);
+        uicontrol(Handles.TopPanel,...
+            'Style','popupmenu',...
+            'Position',[269-132 35 122 20],...
+            'String',' ',...
+            'BackgroundColor',[1 1 1],...
+            'Tag','ColorPUM',...
+            'Enable','off',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@ColorPUMCallback);
+        uicontrol(Handles.TopPanel,...
+            'Style','text',...
+            'HorizontalAlignment','left',...
+            'String','Y Axis:',...
+            'Position',[401-132 50 122 20]);
+        uicontrol(Handles.TopPanel,...
+            'Style','popupmenu',...
+            'Position',[401-132 35 122 20],...
+            'String',' ',...
+            'BackgroundColor',[1 1 1],...
+            'Tag','Color2PUM',...
+            'Enable','off',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Callback',@Color2PUMCallback);
+        cicon(:,:,1)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
+        cicon(:,:,2)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
+        cicon(:,:,3)=max(min(filter2(ones(3,3)/6,rand(16,16)),1),0);
+        uicontrol(Handles.TopPanel,...
+            'Style','pushbutton',...
+            'Position',[543-132 35 30 30],...
+            'Cdata',cicon,...
+            'Tag','ColorBtn',...
+            'CreateFcn',@GeneralCreateFcn,...
+            'Enable','off',...
+            'Callback',@ColorBtnCallback);
+        %%  Constract the menu
+        MenuSession = uimenu(Handles.fh,...
+            'Label','Session',...
+            'Callback',@mSessionCallback);
+        MenuData = uimenu(Handles.fh,...
+            'Label','Data',...
+            'Callback',@mDataCallback);
+        MenuGraphs = uimenu(Handles.fh,...
+            'Label','Graphs',...
+            'Callback',@mGraphsCallback);
+        MenuDisplay = uimenu(Handles.fh,...
+            'Label','Display',...
+            'Callback',@mDisplayCallback);
+        MenuGates = uimenu(Handles.fh,...
+            'Label','Gates',...
+            'Callback',@mGatesCallback);
+        MenuStats = uimenu(Handles.fh,'Label','Stats');
+        MenuHelp = uimenu(Handles.fh,'Label','Help');
+        %%    Sessions menu
+        uimenu(MenuSession,...
+            'Label','New Session',...
+            'Callback',@SessionNewCallback);
+        uimenu(MenuSession,...
+            'Label','Open Session...',...
+            'Callback',@SessionLoadCallback);
+        uimenu(MenuSession,...
+            'Label','Save',...
+            'Callback',@SessionSaveCallback);
+        uimenu(MenuSession,...
+            'Label','Save As...',...
+            'Callback',@SessionSaveAsCallback);
+        uimenu(MenuSession,...
+            'Label','Export To Workspace...',...
+            'Callback',@SessionExportCallback);
+        uimenu(MenuSession,...
+            'Label','Use Relative Path',...
+            'Callback',@SessionUseRelPath);
+        %%    Data menu
+        GenerateDataMenu(MenuData)
+        %%    Graphs menu
+        GenerateGraphsMenu(MenuGraphs)
+        %%    Display menu
+        GenerateDisplayMenu(MenuDisplay)
+        %%    Gates menu
+        GenerateGatesMenu(MenuGates)
+        %%    STATS menu
+        uimenu(MenuStats,...
+            'Label','Stat Window...',...
+            'Callback',@StatWinCallback);
+        uimenu(MenuStats,...
+            'Label','SetUp...',...
+            'Callback',@ViewSetup);
+        %%    HELP menu
+        uimenu(MenuHelp,...
+            'Label','Show Keyboard Shortcuts',...
+            'Callback',{@HelpKeys});
+        uimenu(MenuHelp,...
+            'Label','About...',...
+            'Callback',{@HelpAbout});
+        %% Context menus
+        %Graphs
+        GraphsCM = uicontextmenu('Parent',Handles.fh,...
+            'Callback',@mGraphsCallback);
+        set(Handles.GraphList,'UIContextMenu',GraphsCM);
+        GenerateGraphsMenu(GraphsCM)
+        %Gates
+        Handles.GatesCM = uicontextmenu('Parent',Handles.fh,...
+            'Callback',@mGatesCallback);
+        set(Handles.GateList,'UIContextMenu',Handles.GatesCM);
+        GenerateGatesMenu(Handles.GatesCM)
+        %Display
+        DisplayCM = uicontextmenu('Parent',Handles.fh,...
+            'Callback',@mDisplayCallback);
+        set(Handles.ax,'UIContextMenu',DisplayCM);
+        GenerateDisplayMenu(DisplayCM);
+
+        %% construction function
+        function GeneralCreateFcn(hObject,~)
+            if ~isempty(get(hObject,'Tag'))
+                Handles.(get(hObject,'Tag'))=hObject;
+            end
+        end
+        function GenerateDataMenu(hObject)
+            % Data menu
+            uimenu(hObject,...
+                'Label','Load Data Files...',...
+                'Callback',@SampleLoadCallback);
+            uimenu(hObject,...
+                'Label','Load Data Folder...',...
+                'Callback',@FolderLoadCallback);
+            uimenu(hObject,...
+                'Label','Save Samples',...
+                'Callback',@TubeSaveCallback);
+            uimenu(hObject,...
+                'Label','Remove Samples...',...
+                'Callback',@TubeRemoveCallback);
+            uimenu(hObject,...
+                'Label','Rename Samples...',...
+                'Callback',@TubeRenameCallback);
+            uimenu(hObject,...
+                'Label','File Rename Samples...',...
+                'Callback',@FileTubeRenameCallback);
+            uimenu(hObject,...
+                'Label','Samples parameters...',...
+                'Callback',@TubeShowPrmCallback);
+            MenuTubeComp=uimenu(hObject,...
+                'Label','Compensation');
+            uimenu(hObject,...
+                'Label','View Parameters...',...
+                'Callback',@TubePrmCallback);
+            uimenu(hObject,...
+                'Label','Add parameter',...
+                'callback',@TubeAddParam);
+            % Compensation submenu
+            uimenu(MenuTubeComp,...
+                'Label','Set Compensation...',...
+                'Callback',@TubeCompCallback);
+        end
+        function GenerateGraphsMenu(hObject)
+            uimenu(hObject,...
+                'Label','Batch...',...
+                'Callback',{@ToolsBatch});
+            uimenu(hObject,...
+                'Label','Add all tubes',...
+                'Callback',{@ToolsAddall});
+            uimenu(hObject,...
+                'Label','New Fit',...
+                'Callback',{@ToolsNewFit});
+            uimenu(hObject,...
+                'Label','Apply Fit',...
+                'Callback',{@ToolsApplyFit});
+            uimenu(hObject,...
+                'Label','Remove Fit',...
+                'Callback',{@ToolsRemFit});
+            uimenu(hObject,...
+                'Label','Export Data',...
+                'Callback',{@ToolsExport});
+        end
+        function GenerateGatesMenu(hObject)
+            uimenu(hObject,...
+                'Label','Add Gate',...
+                'Callback',@MenuGatesAddGate);
+            uimenu(hObject,...
+                'Label','Add Contour Gate',...
+                'Callback',@MenuGatesAddContourGate);
+            uimenu(hObject,...
+                'Label','Add Logical Gate',...
+                'Callback',@MenuGatesAddLogicalGate);
+            uimenu(hObject,...
+                'Label','Add Artifacts Gate',...
+                'Callback',@MenuGatesAddArtifactsGate);
+            uimenu(hObject,...
+                'Label','Remove Gate',...
+                'Callback',@MenuGatesRemove);
+            uimenu(hObject,...
+                'Label','Edit Gates',...
+                'Callback',@MenuGatesEditor);
+        end
+        function GenerateDisplayMenu(hObject)
+            acmquadmenu=uimenu(hObject,...
+                'Label','Quadrants');
+            uimenu(acmquadmenu,...
+                'Label','Set Quadrants',...
+                'Callback',@ACM_setquad);
+            uimenu(acmquadmenu,...
+                'Label','Copy Quadrants',...
+                'Callback',@ACM_cpquad);
+            uimenu(acmquadmenu,...
+                'Label','Paste Quadrants',...
+                'Callback',@ACM_pastequad);
+            uimenu(acmquadmenu,...
+                'Label','Remove Quadrants',...
+                'Callback',@ACM_rmquad);
+            uimenu(hObject,...
+                'Label','Fix Axis',...
+                'Callback',@ACM_fixaxis);
+            uimenu(hObject,...
+                'Label','Draw to Figure',...
+                'Callback',@ACM_DrawToFigure);
+            uimenu(hObject,...
+                'Label','Graph Properties...',...
+                'Callback',@ACM_graphprop);
+        end
+        
+        %% Handles to functions
+        Handles.DrawFcn=@DrawGraphs;
+        Handles.UpdateGateListFcn=@UpdateGateList;
+        Handles.CalculateGatedData=@CalculateGatedData;
+        Handles.RecalcGateLogicalMask=@RecalcGateLogicalMask;
+        
+        %% Create a database and add to gui
+        efdb=init_efdb();
+        efdb.Handles=Handles;
+        efdb_save(efdb);
+        
+        %% remove return value
+        fh = Handles.fh;
+
     end
 
-    function ResizeFcn(hObject,eventdata)
-        mArgsIn=guidata(fh);
-        p=get(fh,'CurrentPoint');
-        if p(1)>mArgsIn.DBFile.geom.Graphsize && p(1)<=mArgsIn.DBFile.geom.Graphsize+5
+%%  Callbacks for MYGUI.
+% loading DB        efdb=efdb_load(hObject);
+% saving DB         efdb_save(efdb);
+% disable gui       efdb=disable_gui(efdb);
+% enable gui        efdb=enable_gui(efdb);
+%
+    function ResizeFcn(hObject,~)
+        WBDF = get(gcf,'WindowButtonDownFcn');
+        WBUF = get(gcf,'WindowButtonUpFcn');
+        WBMF = get(gcf,'WindowButtonMotionFcn');
+        pntr = get(gcf,'Pointer');
+        
+        efdb=efdb_load(hObject);
+        p=get(hObject,'CurrentPoint');
+        if p(1)>efdb.DBInfo.geom.Graphsize && p(1)<=efdb.DBInfo.geom.Graphsize+5
             %resize the graph list
-            fh.WindowButtonMotionFcn=@ResizeWBMF;
-            fh.WindowButtonUpFcn=@ResizeWBUP;
+            hObject.WindowButtonMotionFcn=@ResizeWBMF;
+            hObject.WindowButtonUpFcn=@ResizeWBUP;
         else
             %do nothing
         end
 
-        function ResizeWBUP(hObject,eventdata)
-            fh.WindowButtonMotionFcn = @fhMotionFcn;
+        function ResizeWBUP(hObject,~)
+            set(gcf,'WindowButtonDownFcn', WBDF);
+            set(gcf,'WindowButtonUpFcn', WBUF);
+            set(gcf,'WindowButtonMotionFcn', WBMF);
+            set(gcf,'Pointer', pntr);
         end
-        function ResizeWBMF(hObject,eventdata)
-            mArgsIn=guidata(fh);
-            mp=get(fh,'CurrentPoint');
-            mArgsIn.DBFile.geom.Graphsize=mp(1);
-            guidata(fh,mArgsIn);
-            fhResizeFcn(fh,[]);
+        function ResizeWBMF(hObject,~)
+            efdb=efdb_load(hObject);
+            mp=get(hObject,'CurrentPoint');
+            efdb.DBInfo.geom.Graphsize=mp(1);
+            efdb_save(efdb);
+            fhResizeFcn(hObject,[]);
         end
  
     end
-    function fhResizeFcn(hObject,eventdata)
-        mArgsIn=guidata(hObject);
+    function fhResizeFcn(hObject,~)
+        efdb=efdb_load(hObject);
         guipos=get(hObject,'Position');
-        Graphsize=mArgsIn.DBFile.geom.Graphsize;
-        Gatesize=mArgsIn.DBFile.geom.Gatesize;
+        Graphsize=efdb.DBInfo.geom.Graphsize;
+        Gatesize=efdb.DBInfo.geom.Gatesize;
         %guisize x must include the graphs, gates, and 450 for the top_panel
         %guisize y must include the top_panel+a bit for the axis
         guisizex=max(Graphsize+Gatesize+450,guipos(3));
         guisizey=max(100+10,guipos(4));
         guipos=[guipos(1),guipos(2)+guipos(4)-guisizey,guisizex,guisizey];
         set(hObject,'Position',guipos);
-        set(mArgsIn.Handles.GraphList,'Position',[0 0 Graphsize guisizey-30]);
-        set(mArgsIn.Handles.AddBtn,'Position',[0 guisizey-30 floor(Graphsize/2) 30]);
-        set(mArgsIn.Handles.DelBtn,'Position',[floor(Graphsize/2) guisizey-30 ceil(Graphsize/2) 30]);
-        set(mArgsIn.Handles.TopPanel,'Position',[Graphsize,guisizey-100,guisizex-Graphsize-Gatesize,100]);
-        set(mArgsIn.Handles.GateList,'Position',[guisizex-Gatesize 0 Gatesize guisizey]);
-        set(mArgsIn.Handles.ax,'OuterPosition',[Graphsize 0 guisizex-Graphsize-Gatesize,guisizey-100]);
-        guidata(fh,mArgsIn);
+        set(efdb.Handles.GraphList,'Position',[0 0 Graphsize guisizey-30]);
+        set(efdb.Handles.AddBtn,'Position',[0 guisizey-30 floor(Graphsize/2) 30]);
+        set(efdb.Handles.DelBtn,'Position',[floor(Graphsize/2) guisizey-30 ceil(Graphsize/2) 30]);
+        set(efdb.Handles.TopPanel,'Position',[Graphsize,guisizey-100,guisizex-Graphsize-Gatesize,100]);
+        set(efdb.Handles.GateList,'Position',[guisizex-Gatesize 0 Gatesize guisizey]);
+        set(efdb.Handles.ax,'OuterPosition',[Graphsize 0 guisizex-Graphsize-Gatesize,guisizey-100]);
+        efdb_save(efdb);
         %redraw the gates in the gate list
-        UpdateGateList(mArgsIn);
+        UpdateGateList(efdb);
     end
-    function fhClose(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        if isfield(mArgsIn,'DBFile') && isfield(mArgsIn.DBFile,'isChanged') && mArgsIn.DBFile.isChanged==1
+    function fhClose(hObject,eventdata)
+        efdb=efdb_load(hObject);
+        if isfield(efdb,'DBInfo') && isfield(efdb.DBInfo,'isChanged') && efdb.DBInfo.isChanged==1
             button = questdlg('Some unsaved data will be lost.','Exit EasyFlow','Save', 'Quit', 'Cancel', 'Cancel');
             if strcmp(button,'Cancel')
                 return
             end
             if strcmp(button,'Save')
-                if isfield(mArgsIn.DBFile,'Name') && exist(mArgsIn.DBFile.Name,'file')
-                    FileSaveCallback(hObject,eventdata,fh);
+                if isfield(efdb.DBInfo,'Name') && exist(efdb.DBInfo.Name,'file')
+                    SessionSaveCallback(hObject,eventdata);
                 else
-                    FileSaveAsCallback(hObject,eventdata,fh);
+                    SessionSaveAsCallback(hObject,eventdata);
                 end
             end
         end
         
-        if isfield(mArgsIn.Handles,'graphprop')
-            delete(mArgsIn.Handles.graphprop)
-            mArgsIn.Handles=rmfield(mArgsIn.Handles,'graphprop');
+        if isfield(efdb.Handles,'graphprop')
+            delete(efdb.Handles.graphprop)
+            efdb.Handles=rmfield(efdb.Handles,'graphprop');
         end
-        if isfield(mArgsIn.Handles,'statwin')
-            delete(mArgsIn.Handles.statwin)
-            mArgsIn.Handles=rmfield(mArgsIn.Handles,'statwin');
+        if isfield(efdb.Handles,'statwin')
+            delete(efdb.Handles.statwin)
+            efdb.Handles=rmfield(efdb.Handles,'statwin');
         end
-        if isfield(mArgsIn.Handles,'gateedit')
-            delete(mArgsIn.Handles.gateedit)
-            mArgsIn.Handles=rmfield(mArgsIn.Handles,'gateedit');
+        if isfield(efdb.Handles,'gateedit')
+            delete(efdb.Handles.gateedit)
+            efdb.Handles=rmfield(efdb.Handles,'gateedit');
         end
-        if isfield(mArgsIn.Handles,'compensation')
-            delete(mArgsIn.Handles.compensation)
-            mArgsIn.Handles=rmfield(mArgsIn.Handles,'compensation');
+        if isfield(efdb.Handles,'compensation')
+            delete(efdb.Handles.compensation)
+            efdb.Handles=rmfield(efdb.Handles,'compensation');
         end
-        guidata(fh,mArgsIn);
+        efdb_save(efdb);
         if isempty(gcbf)
             if length(dbstack) == 1
                 warning('MATLAB:closereq', ...
@@ -587,517 +578,538 @@ set(fh,'Visible','on');
         end
     end
     function fhKeyPressFcn(hObject,eventdata)
-        mArgsIn=guidata(fh);
+        efdb=efdb_load(hObject);
         if strcmp(eventdata.Modifier,'control')
             if strcmp(eventdata.Key,'a')
-                for graph=mArgsIn.curGraph
-                    mArgsIn.GraphDB(graph).Name=mArgsIn.GraphDB(graph).Data;
+                for graph=efdb.curGraph
+                    efdb.GraphDB(graph).Name=efdb.GraphDB(graph).Data;
                 end
-                List=get(mArgsIn.Handles.GraphList,'String');
-                List(get(mArgsIn.Handles.GraphList,'Value'))={mArgsIn.GraphDB(mArgsIn.curGraph).Data};
-                set(mArgsIn.Handles.GraphList,'String',List);
-                set(mArgsIn.Handles.GraphName,'String',mArgsIn.GraphDB(mArgsIn.curGraph(1)).Data);
-                mArgsIn.DBFile.isChanged=1;
-                guidata(fh,mArgsIn);
-                DrawGraphs(fh);
+                List=get(efdb.Handles.GraphList,'String');
+                List(get(efdb.Handles.GraphList,'Value'))={efdb.GraphDB(efdb.curGraph).Data};
+                set(efdb.Handles.GraphList,'String',List);
+                set(efdb.Handles.GraphName,'String',efdb.GraphDB(efdb.curGraph(1)).Data);
+                efdb.DBInfo.isChanged=1;
+                efdb = DrawGraphs(efdb);
             end
             if strcmp(eventdata.Key,'c')
-                for graph=mArgsIn.curGraph
-                    mArgsIn.GraphDB(graph).PlotColor=[];
+                for graph=efdb.curGraph
+                    efdb.GraphDB(graph).PlotColor=[];
                 end
-                mArgsIn.DBFile.isChanged=1;
-                guidata(fh,mArgsIn);
-                DrawGraphs(fh);
+                efdb.DBInfo.isChanged=1;
+                efdb = DrawGraphs(efdb);
             end
         end
-        guidata(fh,mArgsIn)
+        efdb_save(efdb);
     end
-    function fhMotionFcn(hObject,eventdata)
-        mArgsIn=guidata(fh);
-        p=get(fh,'CurrentPoint');
-        if strcmp(mArgs.Handles.GraphList.Enable,'on')
-            if p(1)>mArgsIn.DBFile.geom.Graphsize && p(1)<=mArgsIn.DBFile.geom.Graphsize+5
-                set(fh,'Pointer','right')
+    function fhMotionFcn(hObject,~)
+        efdb=efdb_load(hObject);
+        fhIn=efdb.Handles.fh;
+        p=get(fhIn,'CurrentPoint');
+        if strcmp(efdb.Handles.GraphList.Enable,'on')
+            if p(1)>efdb.DBInfo.geom.Graphsize && p(1)<=efdb.DBInfo.geom.Graphsize+5
+                set(fhIn,'Pointer','right')
             else
-                set(fh,'Pointer','arrow')
+                set(fhIn,'Pointer','arrow')
             end
         end
-    end
-    function GeneralCreateFcn(hObject,eventdata,fh)
-        mArgs=guidata(fh);
-        if ~isempty(get(hObject,'Tag'))
-            mArgs.Handles.(get(hObject,'Tag'))=hObject;
-        end
-        guidata(fh,mArgs);
     end
 
-    function TubePUMCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        for curGraph=mArgsIn.curGraph
-            mArgsIn.GraphDB(curGraph).Data=mArgsIn.TubeNames{get(hObject,'Value')};
-            mArgsIn.GraphDB(curGraph).DataDeconv=[];
+    function TubePUMCallback(hObject,eventdata)
+        efdb=efdb_load(hObject);
+        for curGraph=efdb.curGraph
+            efdb.GraphDB(curGraph).Data=efdb.TubeNames{get(hObject,'Value')};
+            efdb.GraphDB(curGraph).DataDeconv=[];
             %set up the new gates for this tube
-            curtube=genvarname(mArgsIn.GraphDB(curGraph).Data);
+            curtube=matlab.lang.makeValidName(efdb.GraphDB(curGraph).Data);
             %keep gates that exist in the new tube
-            if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,curtube)
-                mArgsIn.GraphDB(curGraph).Gates=mArgsIn.GraphDB(curGraph).Gates(isfield(mArgsIn.GatesDB.(curtube),mArgsIn.GraphDB(curGraph).Gates));
+            if isfield(efdb,'GatesDB') && isfield(efdb.GatesDB,curtube)
+                efdb.GraphDB(curGraph).Gates=efdb.GraphDB(curGraph).Gates(isfield(efdb.GatesDB.(curtube),efdb.GraphDB(curGraph).Gates));
             else
-                mArgsIn.GraphDB(curGraph).Gates=[];
+                efdb.GraphDB(curGraph).Gates=[];
             end
         end
-        mArgsIn=CalculateGatedData(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
-        mArgsIn=DataChange(mArgsIn);
-        guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh)
-        mArgsIn=CalculateMarkers(mArgsIn);
-        guidata(fh,mArgsIn);
+        efdb=CalculateGatedData(efdb);
+        efdb.DBInfo.isChanged=1;
+        efdb=DataChange(efdb);
+        efdb_save(efdb);
+        GraphListCallback(efdb.Handles.GraphList,eventdata)
+        efdb=CalculateMarkers(efdb);
+        efdb_save(efdb);
     end
-    function CtrlPUMCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        for curGraph=mArgsIn.curGraph
-            mArgsIn.GraphDB(curGraph).Ctrl=mArgsIn.TubeNames{get(hObject,'Value')};
-            mArgsIn.GraphDB(curGraph).DataDeconv=[];
-        end
-        %change color to show homogeneity
-        set(mArgsIn.Handles.CtrlPUM,'ForegroundColor',[0 0 0]);
-        %note: assume color for Ctrl same as color for data.
-        mArgsIn.DBFile.isChanged=1;
-        mArgsIn=CalculateGatedData(mArgsIn);
-        guidata(fh,mArgsIn);
-        DrawGraphs(fh);
-    end
-    function ColorPUMCallback(hObject,eventdata,fh)
+    function ColorPUMCallback(hObject,~)
+        efdb=efdb_load(hObject);
         if strcmp(get(hObject,'String'),' ')
             return;
         end
-        mArgsIn=guidata(fh);
         colorlist=get(hObject,'String');
         colorname=strtrim(strtok(colorlist(get(hObject,'Value')),':'));
-        for curGraph=mArgsIn.curGraph
-            mArgsIn.GraphDB(curGraph).Color=char(colorname);
-            mArgsIn.GraphDB(curGraph).DataDeconv=[];
+        for curGraph=efdb.curGraph
+            efdb.GraphDB(curGraph).Color=char(colorname);
+            efdb.GraphDB(curGraph).DataDeconv=[];
         end
         %change color to show homogeneity
-        set(mArgsIn.Handles.ColorPUM,'ForegroundColor',[0 0 0]);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
-        DrawGraphs(fh);
-        mArgsIn=CalculateMarkers(mArgsIn);
-        mArgsIn=DataChange(mArgsIn);
-        guidata(fh,mArgsIn);
+        set(efdb.Handles.ColorPUM,'ForegroundColor',[0 0 0]);
+        efdb.DBInfo.isChanged=1;
+        efdb = DrawGraphs(efdb);
+        efdb=CalculateMarkers(efdb);
+        efdb=DataChange(efdb);
+        efdb_save(efdb);
     end
-    function Color2PUMCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function Color2PUMCallback(hObject,~)
+        efdb=efdb_load(hObject);
         colorlist=get(hObject,'String');
         colorname=strtrim(strtok(colorlist(get(hObject,'Value')),':'));
-        for curGraph=mArgsIn.curGraph
-            mArgsIn.GraphDB(curGraph).Color2=char(colorname);
-            mArgsIn.GraphDB(curGraph).DataDeconv=[];
+        for curGraph=efdb.curGraph
+            efdb.GraphDB(curGraph).Color2=char(colorname);
+            efdb.GraphDB(curGraph).DataDeconv=[];
         end
         %change color to show homogeneity
-        set(mArgsIn.Handles.Color2PUM,'ForegroundColor',[0 0 0]);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn);
+        set(efdb.Handles.Color2PUM,'ForegroundColor',[0 0 0]);
+        efdb.DBInfo.isChanged=1;
         %if the graph properties editor exists tell it to update the
         %buttons.
         %if not, only check that color2 is ok.
-        if isfield(mArgsIn.Handles,'graphprop')
-            Args=guidata(mArgsIn.Handles.graphprop);
-            Args.SetEnabledBtnsFcn(fh,mArgsIn.Handles.graphprop);
+        if isfield(efdb.Handles,'graphprop')
+            Args=guidata(efdb.Handles.graphprop);
+            Args.SetEnabledBtnsFcn(efdb.Handles.fh,efdb.Handles.graphprop);
         else
-            if get(mArgsIn.Handles.Color2PUM,'Value')==1 ...color 2 is 'None'
-                    && ~strcmp(mArgsIn.Display.graph_type,'Histogram') %we must have histogram
-                mArgsIn.Display.graph_type='Histogram';
-                mArgsIn.Display.graph_type_Radio=4;
-                mArgsIn.Display.Changed=1;
-                mArgsIn.DBFile.isChanged=1;
-                guidata(fh,mArgsIn);
+            if get(efdb.Handles.Color2PUM,'Value')==1 ...color 2 is 'None'
+                    && ~strcmp(efdb.Display.graph_type,'Histogram') %we must have histogram
+                efdb.Display.graph_type='Histogram';
+                efdb.Display.graph_type_Radio=4;
+                efdb.Display.Changed=1;
+                efdb.DBInfo.isChanged=1;
             end
         end
-        DrawGraphs(fh);
-        mArgsIn=CalculateMarkers(mArgsIn);
-        mArgsIn=DataChange(mArgsIn);
-        guidata(fh,mArgsIn);
+        efdb = DrawGraphs(efdb);
+        efdb = CalculateMarkers(efdb);
+        efdb = DataChange(efdb);
+        efdb_save(efdb);
     end
-    function RemoveCtrlCBCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        for curGraph=mArgsIn.curGraph
-            mArgsIn.GraphDB(curGraph).RemoveCtrl=get(hObject,'Value');
-        end
-        %change color to show homogeneity
-        set(hObject,'ForegroundColor',[0 0 0]);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn);
-        DrawGraphs(fh);
-        mArgsIn=CalculateMarkers(mArgsIn);
-        mArgsIn=DataChange(mArgsIn)
-        guidata(fh,mArgsIn);
-    end
-    function AddBtnCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function AddBtnCallback(hObject,eventdata)
+        efdb=efdb_load(hObject);
         %reselect selected graphs to save their configuration
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh);
+        GraphListCallback(efdb.Handles.GraphList,eventdata);
         %add item to the GraphList and GraphDB and select the new graph
-        List=get(mArgsIn.Handles.GraphList,'String');
+        List=get(efdb.Handles.GraphList,'String');
         curGraph=length(List)+1;
         List{curGraph}=['Graph_' num2str(curGraph)];
         %create the new item
-        if ~isfield(mArgsIn,'curGraph') || isempty(mArgsIn.curGraph) || mArgsIn.curGraph(1)==0;
-            mArgsIn.GraphDB(curGraph).Name=['Graph_' num2str(curGraph)];
-            mArgsIn.GraphDB(curGraph).Data=char(mArgsIn.TubeNames(1));
-            mArgsIn.GraphDB(curGraph).Ctrl='None';
-            mArgsIn.GraphDB(curGraph).Color='None';
-            mArgsIn.GraphDB(curGraph).Color2='None';
-            mArgsIn.GraphDB(curGraph).RemoveCtrl=0;
-            mArgsIn.GraphDB(curGraph).DataDeconv=[];
-            mArgsIn.GraphDB(curGraph).Gates={};
-            mArgsIn.GraphDB(curGraph).GatesOff={};
+        if ~isfield(efdb,'curGraph') || isempty(efdb.curGraph) || efdb.curGraph(1)==0
+            efdb.GraphDB(curGraph).Name=['Graph_' num2str(curGraph)];
+            efdb.GraphDB(curGraph).Data=char(efdb.TubeNames(1));
+            efdb.GraphDB(curGraph).Ctrl='None';
+            efdb.GraphDB(curGraph).Color='None';
+            efdb.GraphDB(curGraph).Color2='None';
+            efdb.GraphDB(curGraph).RemoveCtrl=0;
+            efdb.GraphDB(curGraph).DataDeconv=[];
+            efdb.GraphDB(curGraph).Gates={};
+            efdb.GraphDB(curGraph).GatesOff={};
             %mArgsIn.GraphDB(curGraph).Markers={};
-            mArgsIn.GraphDB(curGraph).Stat=struct;
-            mArgsIn.GraphDB(curGraph).plotdata=[];
-            mArgsIn.GraphDB(curGraph).gatedindex=[];
-            mArgsIn.GraphDB(curGraph).gatedindexctrl=[];
-            mArgsIn.GraphDB(curGraph).Display=mArgsIn.Display;
-            mArgsIn.GraphDB(curGraph).fit=[];
+            efdb.GraphDB(curGraph).Stat=struct;
+            efdb.GraphDB(curGraph).plotdata=[];
+            efdb.GraphDB(curGraph).gatedindex=[];
+            efdb.GraphDB(curGraph).gatedindexctrl=[];
+            efdb.GraphDB(curGraph).Display=efdb.Display;
+            efdb.GraphDB(curGraph).fit=[];
         else
-            prevGraph=mArgsIn.curGraph(1);
-            mArgsIn.GraphDB(curGraph).Name=['Graph_' num2str(curGraph)];
-            mArgsIn.GraphDB(curGraph).Data=mArgsIn.GraphDB(prevGraph).Data;
-            mArgsIn.GraphDB(curGraph).Ctrl=mArgsIn.GraphDB(prevGraph).Ctrl;
-            mArgsIn.GraphDB(curGraph).Color=mArgsIn.GraphDB(prevGraph).Color;
-            mArgsIn.GraphDB(curGraph).Color2=mArgsIn.GraphDB(prevGraph).Color2;
-            mArgsIn.GraphDB(curGraph).RemoveCtrl=mArgsIn.GraphDB(prevGraph).RemoveCtrl;
-            mArgsIn.GraphDB(curGraph).DataDeconv=mArgsIn.GraphDB(prevGraph).DataDeconv;
-            mArgsIn.GraphDB(curGraph).Gates=mArgsIn.GraphDB(prevGraph).Gates;
-            mArgsIn.GraphDB(curGraph).GatesOff=mArgsIn.GraphDB(prevGraph).GatesOff;
+            prevGraph=efdb.curGraph(1);
+            efdb.GraphDB(curGraph).Name=['Graph_' num2str(curGraph)];
+            efdb.GraphDB(curGraph).Data=efdb.GraphDB(prevGraph).Data;
+            efdb.GraphDB(curGraph).Ctrl=efdb.GraphDB(prevGraph).Ctrl;
+            efdb.GraphDB(curGraph).Color=efdb.GraphDB(prevGraph).Color;
+            efdb.GraphDB(curGraph).Color2=efdb.GraphDB(prevGraph).Color2;
+            efdb.GraphDB(curGraph).RemoveCtrl=efdb.GraphDB(prevGraph).RemoveCtrl;
+            efdb.GraphDB(curGraph).DataDeconv=efdb.GraphDB(prevGraph).DataDeconv;
+            efdb.GraphDB(curGraph).Gates=efdb.GraphDB(prevGraph).Gates;
+            efdb.GraphDB(curGraph).GatesOff=efdb.GraphDB(prevGraph).GatesOff;
             %mArgsIn.GraphDB(curGraph).Markers=mArgsIn.GraphDB(prevGraph).Markers;
-            mArgsIn.GraphDB(curGraph).Stat=mArgsIn.GraphDB(prevGraph).Stat;
-            mArgsIn.GraphDB(curGraph).plotdata=mArgsIn.GraphDB(prevGraph).plotdata;
-            mArgsIn.GraphDB(curGraph).gatedindex=mArgsIn.GraphDB(prevGraph).gatedindex;
-            mArgsIn.GraphDB(curGraph).gatedindexctrl=mArgsIn.GraphDB(prevGraph).gatedindexctrl;
-            mArgsIn.GraphDB(curGraph).Display=mArgsIn.GraphDB(prevGraph).Display;
-            mArgsIn.GraphDB(curGraph).fit=mArgsIn.GraphDB(prevGraph).fit;
+            efdb.GraphDB(curGraph).Stat=efdb.GraphDB(prevGraph).Stat;
+            efdb.GraphDB(curGraph).plotdata=efdb.GraphDB(prevGraph).plotdata;
+            efdb.GraphDB(curGraph).gatedindex=efdb.GraphDB(prevGraph).gatedindex;
+            efdb.GraphDB(curGraph).gatedindexctrl=efdb.GraphDB(prevGraph).gatedindexctrl;
+            efdb.GraphDB(curGraph).Display=efdb.GraphDB(prevGraph).Display;
+            efdb.GraphDB(curGraph).fit=efdb.GraphDB(prevGraph).fit;
         end
-        set(mArgsIn.Handles.GraphList,'String',List);
-        set(mArgsIn.Handles.GraphList,'Value',curGraph);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh);
+        set(efdb.Handles.GraphList,'String',List);
+        set(efdb.Handles.GraphList,'Value',curGraph);
+        efdb.DBInfo.isChanged=1;
+        efdb_save(efdb);
+        GraphListCallback(efdb.Handles.GraphList,eventdata);
     end
-    function DelBtnCallback(hObject,eventdata,fh)
+    function DelBtnCallback(hObject,eventdata)
         %delete item from the GraphList and GraphDB and select the previous
         %one
-        mArgsIn=guidata(fh);
-        selected=get(mArgsIn.Handles.GraphList,'Value');
+        efdb=efdb_load(hObject);
+        selected=get(efdb.Handles.GraphList,'Value');
         if selected==0
             return;
         end
-        mArgsIn.GraphDB(selected)=[];
+        efdb.GraphDB(selected)=[];
         
-        List=get(mArgsIn.Handles.GraphList,'String');
+        List=get(efdb.Handles.GraphList,'String');
         List(selected)=[];
-        mArgsIn.curGraph=min(min(selected),length(List));
+        efdb.curGraph=min(min(selected),length(List));
         
-        set(mArgsIn.Handles.GraphList,'Value',mArgsIn.curGraph);
-        set(mArgsIn.Handles.GraphList,'String',List);
+        set(efdb.Handles.GraphList,'Value',efdb.curGraph);
+        set(efdb.Handles.GraphList,'String',List);
         
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh);
+        efdb.DBInfo.isChanged=1;
+        efdb_save(efdb);
+        GraphListCallback(efdb.Handles.GraphList,eventdata);
     end
-    function ColorBtnCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function ColorBtnCallback(hObject,~)
+        efdb=efdb_load(hObject);
         color=colorui;
         if ~isscalar(color)
-            [mArgsIn.GraphDB(mArgsIn.curGraph).PlotColor]=deal(color);
+            [efdb.GraphDB(efdb.curGraph).PlotColor]=deal(color);
         end
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn);
-        DrawGraphs(fh);
+        efdb.DBInfo.isChanged=1;
+        efdb = DrawGraphs(efdb);
+        efdb_save(efdb);
     end
-    function GraphNameCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        List=get(mArgsIn.Handles.GraphList,'String');
-        List{get(mArgsIn.Handles.GraphList,'Value')}=get(hObject,'String');
-        set(mArgsIn.Handles.GraphList,'String',List);
-        mArgsIn.GraphDB(get(mArgsIn.Handles.GraphList,'Value')).Name=get(hObject,'String');
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+    function GraphNameCallback(hObject,~)
+        efdb=efdb_load(hObject);
+        List=get(efdb.Handles.GraphList,'String');
+        List{get(efdb.Handles.GraphList,'Value')}=get(hObject,'String');
+        set(efdb.Handles.GraphList,'String',List);
+        efdb.GraphDB(get(efdb.Handles.GraphList,'Value')).Name=get(hObject,'String');
+        efdb.DBInfo.isChanged=1;
+        efdb_save(efdb);
     end
-    function GraphListCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function GraphListCallback(hObject,~)
+        efdb=efdb_load(hObject);
+        fhIn=efdb.Handles.fh;
         %if changed, save the display settings for the old graphs
         graphlist=get(hObject,'Value');
-        if isfield(mArgsIn.Display,'Changed') && mArgsIn.Display.Changed==1
-            for graph=mArgsIn.curGraph %this is the previously selected graphs
-                mArgsIn.GraphDB(graph).Display=mArgsIn.Display;
+        if isfield(efdb.Display,'Changed') && efdb.Display.Changed==1
+            for graph=efdb.curGraph %this is the previously selected graphs
+                efdb.GraphDB(graph).Display=efdb.Display;
             end
         end
         if isempty(graphlist)
             return
         elseif graphlist(1)==0 %no graphs
-            mArgsIn.curGraph=0;
-            set(mArgsIn.Handles.TubePUM,'Enable','off');
-            set(mArgsIn.Handles.CtrlPUM,'Enable','off');
-            set(mArgsIn.Handles.ColorPUM,'Enable','off');
-            set(mArgsIn.Handles.Color2PUM,'Enable','off');
-            set(mArgsIn.Handles.GraphName,'Enable','off');
-            set(mArgsIn.Handles.RemoveCtrlCB,'Enable','off');
-            set(mArgsIn.Handles.ColorBtn,'Enable','off');
+            efdb.curGraph=0;
+            set(efdb.Handles.TubePUM,'Enable','off');
+            set(efdb.Handles.ColorPUM,'Enable','off');
+            set(efdb.Handles.Color2PUM,'Enable','off');
+            set(efdb.Handles.GraphName,'Enable','off');
+            set(efdb.Handles.ColorBtn,'Enable','off');
             return
         else
             %clear plotdata from old plotted graphs
-            if isfield(mArgsIn,'curGraph') && ~isempty(mArgsIn.curGraph) && ~any(mArgsIn.curGraph==0)
-                [mArgsIn.GraphDB(mArgsIn.curGraph).plotdata]=deal([]);
+            if isfield(efdb,'curGraph') && ~isempty(efdb.curGraph) && ~any(efdb.curGraph==0)
+                [efdb.GraphDB(efdb.curGraph).plotdata]=deal([]);
             end
             
-            mArgsIn.curGraph=graphlist;
+            efdb.curGraph=graphlist;
             %enable compnents,
             %read the TopPanel parameters for the first one of the graphs and verify them
             %ColorBtn
-            set(mArgsIn.Handles.ColorBtn,'Enable','on');
+            set(efdb.Handles.ColorBtn,'Enable','on');
             %Name
-            if isscalar(mArgsIn.curGraph)
-                set(mArgsIn.Handles.GraphName,'Enable','on');
-                if ~isfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)),'Name') || ~ischar(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Name)
-                    mArgsIn.GraphDB(mArgsIn.curGraph(1)).Name=['Graph_' num2str(mArgsIn.curGraph(1))];
+            if isscalar(efdb.curGraph)
+                set(efdb.Handles.GraphName,'Enable','on');
+                if ~isfield(efdb.GraphDB(efdb.curGraph(1)),'Name') || ~ischar(efdb.GraphDB(efdb.curGraph(1)).Name)
+                    efdb.GraphDB(efdb.curGraph(1)).Name=['Graph_' num2str(efdb.curGraph(1))];
                 end
-                set(mArgsIn.Handles.GraphName,'String',mArgsIn.GraphDB(mArgsIn.curGraph(1)).Name);
+                set(efdb.Handles.GraphName,'String',efdb.GraphDB(efdb.curGraph(1)).Name);
             else
-                set(mArgsIn.Handles.GraphName,'Enable','off');
-                set(mArgsIn.Handles.GraphName,'String',mArgsIn.GraphDB(mArgsIn.curGraph(1)).Name);
+                set(efdb.Handles.GraphName,'Enable','off');
+                set(efdb.Handles.GraphName,'String',efdb.GraphDB(efdb.curGraph(1)).Name);
             end
             %Data
-            set(mArgsIn.Handles.TubePUM,'Enable','on');
-            if length(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Data}))==1
-                set(mArgsIn.Handles.TubePUM,'ForegroundColor',[0 0 0]);
+            set(efdb.Handles.TubePUM,'Enable','on');
+            if length(unique({efdb.GraphDB(efdb.curGraph).Data}))==1
+                set(efdb.Handles.TubePUM,'ForegroundColor',[0 0 0]);
                 %23/3/9     DataNumber=find(cellfun(@(x) strcmp(x,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Data),mArgsIn.TubeNames),1);
-                DataNumber=find(strcmp(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Data,mArgsIn.TubeNames),1);
+                DataNumber=find(strcmp(efdb.GraphDB(efdb.curGraph(1)).Data,efdb.TubeNames),1);
                 if DataNumber
-                    set(mArgsIn.Handles.TubePUM,'Value',DataNumber);
+                    set(efdb.Handles.TubePUM,'Value',DataNumber);
                 else
-                    set(mArgsIn.Handles.TubePUM,'Value',1);
+                    set(efdb.Handles.TubePUM,'Value',1);
                 end
             else
-                set(mArgsIn.Handles.TubePUM,'ForegroundColor',[1 0 0]);
-                set(mArgsIn.Handles.TubePUM,'Value',1);
-            end
-            %Ctrl
-            set(mArgsIn.Handles.CtrlPUM,'Enable','on');
-            if length(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Ctrl}))==1
-                set(mArgsIn.Handles.CtrlPUM,'ForegroundColor',[0 0 0]);
-                %23/3/9     CtrlNumber=find(cellfun(@(x) strcmp(x,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Ctrl),mArgsIn.TubeNames),1);
-                CtrlNumber=find(strcmp(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Ctrl,mArgsIn.TubeNames),1);
-                if CtrlNumber
-                    set(mArgsIn.Handles.CtrlPUM,'Value',CtrlNumber);
-                else
-                    set(mArgsIn.Handles.CtrlPUM,'Value',1);
-                end
-            else
-                set(mArgsIn.Handles.CtrlPUM,'ForegroundColor',[1 0 0]);
-                set(mArgsIn.Handles.CtrlPUM,'Value',1);
-            end
-            %RemoveCtrl
-            set(mArgsIn.Handles.RemoveCtrlCB,'Enable','on');
-            if length(unique([mArgsIn.GraphDB(mArgsIn.curGraph).RemoveCtrl]))==1
-                set(mArgsIn.Handles.RemoveCtrlCB,'ForegroundColor',[0 0 0]);
-                set(mArgsIn.Handles.RemoveCtrlCB,'Value',mArgsIn.GraphDB(mArgsIn.curGraph(1)).RemoveCtrl);
-            else
-                set(mArgsIn.Handles.RemoveCtrlCB,'ForegroundColor',[1 0 0]);
-                set(mArgsIn.Handles.RemoveCtrlCB,'Value',0);
+                set(efdb.Handles.TubePUM,'ForegroundColor',[1 0 0]);
+                set(efdb.Handles.TubePUM,'Value',1);
             end
             
             %set up the new gates for this graph
-            UpdateGateList(mArgsIn);
+            UpdateGateList(efdb);
             
             %Color and color2
             %create the common colors lists.
             %if the data tube is not found or one of the graph is
             %none, the list is empty
-            if isfield(mArgsIn.TubeDB,'Tubename') && length(unique([mArgsIn.TubeDB.Tubename,{mArgsIn.GraphDB(mArgsIn.curGraph).Data}]))==length(unique([mArgsIn.TubeDB.Tubename]))
-                tubeidx=arrayfun(@(x) find(strcmp([mArgsIn.TubeDB.Tubename],x),1,'first'), {mArgsIn.GraphDB(mArgsIn.curGraph).Data});
-                allparname=[mArgsIn.TubeDB(tubeidx).parname];
+            if isfield(efdb.TubeDB,'Tubename') && length(unique([efdb.TubeDB.Tubename,{efdb.GraphDB(efdb.curGraph).Data}]))==length(unique([efdb.TubeDB.Tubename]))
+                tubeidx=arrayfun(@(x) find(strcmp([efdb.TubeDB.Tubename],x),1,'first'), {efdb.GraphDB(efdb.curGraph).Data});
+                allparname=[efdb.TubeDB(tubeidx).parname];
                 [allparname,m,n]=unique(allparname(:),'first');
-                apearencenum=hist(n,1:length(allparname));
+                apearencenum=histcounts(n,1:length(allparname));
                 %take all param that appear in all tubes and sort them according to
                 %their apearence order
-                parname=allparname(apearencenum==length(mArgsIn.curGraph));
-                m=m(apearencenum==length(mArgsIn.curGraph));
+                parname=allparname(apearencenum==length(efdb.curGraph));
+                m=m(apearencenum==length(efdb.curGraph));
                 [msort,indx]=sort(m);
                 parname=char(parname(indx));%=allparname(msort)
-                allparsym=[mArgsIn.TubeDB(tubeidx).parsymbol];
+                allparsym=[efdb.TubeDB(tubeidx).parsymbol];
                 parsym=char(allparsym(msort));
                 seperator=char(ones(size(parname,1),1)*': ');
                 %set new lists with the colors
-                set(mArgsIn.Handles.ColorPUM,'String',[{'None'};cellstr([parname,seperator,parsym])]);
-                set(mArgsIn.Handles.Color2PUM,'String',[{'None'};cellstr([parname,seperator,parsym])]);
+                set(efdb.Handles.ColorPUM,'String',[{'None'};cellstr([parname,seperator,parsym])]);
+                set(efdb.Handles.Color2PUM,'String',[{'None'};cellstr([parname,seperator,parsym])]);
             else
-                set(mArgsIn.Handles.ColorPUM,'String',{'None'});
-                set(mArgsIn.Handles.Color2PUM,'String',{'None'});
+                set(efdb.Handles.ColorPUM,'String',{'None'});
+                set(efdb.Handles.Color2PUM,'String',{'None'});
             end
-            set(mArgsIn.Handles.ColorPUM,'Enable','on');
-            if length(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Color}))==1
-                set(mArgsIn.Handles.ColorPUM,'ForegroundColor',[0 0 0]);
-                colorlist=strtrim(strtok(get(mArgsIn.Handles.ColorPUM,'String'),':'));
-                colorind=find(strcmp(colorlist,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color),1,'first');
+            set(efdb.Handles.ColorPUM,'Enable','on');
+            if length(unique({efdb.GraphDB(efdb.curGraph).Color}))==1
+                set(efdb.Handles.ColorPUM,'ForegroundColor',[0 0 0]);
+                colorlist=strtrim(strtok(get(efdb.Handles.ColorPUM,'String'),':'));
+                colorind=find(strcmp(colorlist,efdb.GraphDB(efdb.curGraph(1)).Color),1,'first');
                 if colorind
-                    set(mArgsIn.Handles.ColorPUM,'Value',colorind);
+                    set(efdb.Handles.ColorPUM,'Value',colorind);
                 else
-                    set(mArgsIn.Handles.ColorPUM,'Value',1);
+                    set(efdb.Handles.ColorPUM,'Value',1);
                 end
             else
-                set(mArgsIn.Handles.ColorPUM,'ForegroundColor',[1 0 0]);
-                set(mArgsIn.Handles.ColorPUM,'Value',1);
+                set(efdb.Handles.ColorPUM,'ForegroundColor',[1 0 0]);
+                set(efdb.Handles.ColorPUM,'Value',1);
             end
-            set(mArgsIn.Handles.Color2PUM,'Enable','on');
-            if length(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Color2}))==1
-                set(mArgsIn.Handles.Color2PUM,'ForegroundColor',[0 0 0]);
-                color2list=strtrim(strtok(get(mArgsIn.Handles.Color2PUM,'String'),':'));
-                color2ind=find(strcmp(color2list,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2),1,'first');
+            set(efdb.Handles.Color2PUM,'Enable','on');
+            if length(unique({efdb.GraphDB(efdb.curGraph).Color2}))==1
+                set(efdb.Handles.Color2PUM,'ForegroundColor',[0 0 0]);
+                color2list=strtrim(strtok(get(efdb.Handles.Color2PUM,'String'),':'));
+                color2ind=find(strcmp(color2list,efdb.GraphDB(efdb.curGraph(1)).Color2),1,'first');
                 if color2ind
-                    set(mArgsIn.Handles.Color2PUM,'Value',color2ind);
+                    set(efdb.Handles.Color2PUM,'Value',color2ind);
                 else
-                    set(mArgsIn.Handles.Color2PUM,'Value',1);
+                    set(efdb.Handles.Color2PUM,'Value',1);
                 end
             else
-                set(mArgsIn.Handles.Color2PUM,'ForegroundColor',[1 0 0]);
-                set(mArgsIn.Handles.Color2PUM,'Value',1);
+                set(efdb.Handles.Color2PUM,'ForegroundColor',[1 0 0]);
+                set(efdb.Handles.Color2PUM,'Value',1);
             end
             
             %read the display settings from the first graph, and update the
             %figure prop window.
-            if isfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)),'Display') && ~isempty(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Display)
-                mArgsIn.Display=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Display;
-                if isfield(mArgsIn.Display,'Axis')
-                    set(findobj(fh,'Label','Fix Axis'), 'Checked', 'on');
+            if isfield(efdb.GraphDB(efdb.curGraph(1)),'Display') && ~isempty(efdb.GraphDB(efdb.curGraph(1)).Display)
+                efdb.Display=efdb.GraphDB(efdb.curGraph(1)).Display;
+                if isfield(efdb.Display,'Axis')
+                    set(findobj(fhIn,'Label','Fix Axis'), 'Checked', 'on');
                 else
-                    set(findobj(fh,'Label','Fix Axis'), 'Checked', 'off');
+                    set(findobj(fhIn,'Label','Fix Axis'), 'Checked', 'off');
                 end
-                if isfield(mArgsIn.Handles,'graphprop')
-                    guidata(fh,mArgsIn);
-                    Args=guidata(mArgsIn.Handles.graphprop);
-                    Args.SetEnabledBtnsFcn(fh,mArgsIn.Handles.graphprop);
-                    mArgsIn=guidata(fh);
+                if isfield(efdb.Handles,'graphprop')
+                    guidata(fhIn,efdb);
+                    Args=guidata(efdb.Handles.graphprop);
+                    Args.SetEnabledBtnsFcn(fhIn,efdb.Handles.graphprop);
+                    efdb=guidata(fhIn);
                 end
-                mArgsIn.Display.Changed=0;
+                efdb.Display.Changed=0;
             end
             %update the compensation window
-            if isfield(mArgsIn.Handles,'compensation')
-                guidata(fh,mArgsIn);
-                Args=guidata(mArgsIn.Handles.compensation);
-                Args.fUpdateComp(fh);
-                mArgsIn=guidata(fh);
+            if isfield(efdb.Handles,'compensation')
+                guidata(fhIn,efdb);
+                Args=guidata(efdb.Handles.compensation);
+                Args.fUpdateComp(fhIn);
+                efdb=guidata(fhIn);
             end
         end
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+        efdb.DBInfo.isChanged=1;
         %Draw Graphs
-        DrawGraphs(fh);
+        efdb = DrawGraphs(efdb);
+        efdb_save(efdb);
     end
-    function GateListCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function GateListCallback(hObject,~)
+        efdb=efdb_load(hObject);
         gatename=get(hObject,'Tag');
-        for graph=get(mArgsIn.Handles.GraphList,'Value')
-            mArgsIn.GraphDB(graph).DataDeconv=[];
-            mArgsIn.GraphDB(graph).Gates(strcmp(mArgsIn.GraphDB(graph).Gates,gatename))=[];
-            mArgsIn.GraphDB(graph).GatesOff(strcmp(mArgsIn.GraphDB(graph).GatesOff,gatename))=[];
+        for graph=get(efdb.Handles.GraphList,'Value')
+            efdb.GraphDB(graph).DataDeconv=[];
+            efdb.GraphDB(graph).Gates(strcmp(efdb.GraphDB(graph).Gates,gatename))=[];
+            efdb.GraphDB(graph).GatesOff(strcmp(efdb.GraphDB(graph).GatesOff,gatename))=[];
             if get(hObject,'Value')==1
-                mArgsIn.GraphDB(graph).Gates{end+1}=gatename;
+                efdb.GraphDB(graph).Gates{end+1}=gatename;
             else
-                mArgsIn.GraphDB(graph).GatesOff{end+1}=gatename;
+                efdb.GraphDB(graph).GatesOff{end+1}=gatename;
             end
         end
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+        efdb.DBInfo.isChanged=1;
+        guidata(fh,efdb)
         %Update list, and Draw Graphs
         %tbd: maybe change this to the general datachange function
-        mArgsIn=CalculateGatedData(mArgsIn);
-        UpdateGateList(mArgsIn);
-        guidata(fh,mArgsIn)
-        DrawGraphs(fh);
+        efdb=CalculateGatedData(efdb);
+        UpdateGateList(efdb);
+        efdb = DrawGraphs(efdb);
+        efdb_save(efdb);
     end
 
-    function FileCallback(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
+    function mSessionCallback(hObject,varargin)
+        fhIn=ancestor(hObject,'figure');
+        efdbIn=guidata(fhIn);
         filemenu=get(hObject,'Children');
         set(filemenu,'Enable','on');
-        if ~isfield(mArgsIn,'DBFile') || ~isfield(mArgsIn.DBFile,'Name') || ~exist(mArgsIn.DBFile.Name,'file')
+        if ~isfield(efdbIn,'DBInfo') || ~isfield(efdbIn.DBInfo,'Name') || ~exist(efdbIn.DBInfo.Name,'file')
             set(filemenu(strcmp(get(filemenu,'Label'),'Save')),'Enable','off');
         end
-        if isfield(mArgsIn,'DBFile') && isfield(mArgsIn.DBFile,'isChanged') && mArgsIn.DBFile.isChanged==0
+        if isfield(efdbIn,'DBInfo') && isfield(efdbIn.DBInfo,'isChanged') && efdbIn.DBInfo.isChanged==0
             set(filemenu(strcmp(get(filemenu,'Label'),'Save')),'Enable','off');
             set(filemenu(strcmp(get(filemenu,'Label'),'Save As...')),'Enable','off');
         end
-        if isempty(mArgsIn.GraphDB)
+        if isempty(efdbIn.GraphDB)
             set(filemenu,'Enable','off');
-            set(findobj(hObject,'Label','Open Analysis...'),'Enable','on');
-            set(findobj(hObject,'Label','Open Samples...'),'Enable','on');
+            set(findobj(hObject,'Label','Open Session...'),'Enable','on');
         end
-        if isfield(mArgsIn.DBFile,'RootFolder')
+        MenuFileRelpath=findobj(hObject,'Label','Use Relative Path');
+        if isfield(efdbIn.DBInfo,'RootFolder')
             MenuFileRelpath.Checked='on';
         else
             MenuFileRelpath.Checked='off';
+        end        
+        if isequal(rmfield(efdbIn,'Handles'),rmfield(init_efdb,'Handles'))
+            set(findobj(hObject,'Label', 'New Session'),'Enable','off')
+        else
+            set(findobj(hObject,'Label', 'New Session'),'Enable','on')
         end
     end
-    function FileLoadCallback(hObject,eventdata,fh,filename)
-        set(fh,'pointer','watch');
+    function mDataCallback(hObject,varargin)
+        fhIn=ancestor(hObject,'figure');
+        efdbIn=guidata(fhIn);
+        menuobj=get(hObject,'Children');
+        set(menuobj,'Enable','on');
+        if isempty(efdbIn.TubeDB)
+            set(menuobj,'Enable','off');
+        end
+        item = findobj(hObject, 'Label', 'Load Data Files...');
+        item.Enable='on';
+        item = findobj(hObject, 'Label', 'Load Data Folder...');
+        item.Enable='on';
+    end
+    function mGraphsCallback(hObject,~)
         mArgsIn=guidata(fh);
-        if nargin==4
-            %input session file to load
-            if isempty(fileparts(filename))
-                %only filename with no directory
-                dirname=[pwd filesep];
+        set(get(hObject,'Children'),'Enable','on');
+        if isempty(mArgsIn.GraphDB)
+            set(get(hObject,'Children'),'Enable','off');
+            set(findobj(hObject,'Label','Add all tubes'),'Enable','on');
+        elseif strcmp(mArgsIn.Display.graph_type,'Histogram')
+            set(findobj(hObject,'Label','Load Fit'),'Enable','on');
+            if isscalar(mArgsIn.curGraph)
+                set(findobj(hObject,'Label','New Fit'),'Enable','on');
             else
-                [dirname,a,b]=fileparts(filename);
-                dirname=[dirname filesep];
-                filename=[a,b];
+                set(findobj(hObject,'Label','New Fit'),'Enable','off');
             end
         else
-            if isfield(mArgsIn,'DBFile') && isfield(mArgsIn.DBFile,'Path') && ischar(mArgsIn.DBFile.Path) && exist(mArgsIn.DBFile.Path,'dir')
-                [filename,dirname]=uigetfile('*.efl','Open Analysis',mArgsIn.DBFile.Path);
+            set(findobj(hObject,'Label','Load Fit'),'Enable','off');
+            set(findobj(hObject,'Label','New Fit'),'Enable','off');
+        end
+        guidata(fh,mArgsIn);
+    end
+    function mDisplayCallback(hObject,~)
+        mArgsIn=guidata(fh);
+        if strcmp(mArgsIn.Display.graph_type,'Histogram')
+            set(findobj(hObject,'Label','Quadrants'),'Enable','off');
+        else
+            set(findobj(hObject,'Label','Quadrants'),'Enable','on');
+        end
+    end
+    function mGatesCallback(hObject,~)
+        fhIn=ancestor(hObject,'figure');
+        efdbIn=guidata(fhIn);
+        if isempty(efdbIn.curGraph) 
+            set(hObject.Children,'Enable','off')
+        else
+            set(hObject.Children,'Enable','on')
+        end
+        if strcmp(efdbIn.Display.graph_type,'Histogram')
+            set(findobj(hObject,'Label','Add Contour Gate'),'Enable','off');
+        end
+        if isempty(fieldnames(efdbIn.GatesDBnew))
+            set(findobj(hObject,'Label','Add Logical Gate'),'Enable','off');
+        end
+        % it the menu is called not on a gate, disable editing options
+        if strcmp(get(gco,'Tag'),'GateList')
+            set(findobj(hObject,'Label','Remove Gate'),'Enable','off');
+            set(findobj(hObject,'Label','Edit Gates'),'Enable','off');
+        end
+    end
+
+    function SessionNewCallback(varargin)
+        eval(mfilename);
+    end
+    function SessionLoadCallback(hObject,eventdata,filename)
+        fhIn=ancestor(hObject,'figure');
+        efdbIn=guidata(fhIn);
+        set(fhIn,'pointer','watch');
+        if exist('filename','var') %Load input session file
+            [dname,fname,fext]=fileparts(filename);
+            if isempty(dname)
+                %only filename with no directory
+                dname=pwd;
+            end
+            if isempty(fext)
+                %defult efl extension
+                fext='.efl';
+            end
+            dirname=[dname filesep];
+            filename=[fname,fext];
+        else %Browse for file to open
+            if isfield(efdbIn,'DBInfo') && isfield(efdbIn.DBInfo,'Path') && ischar(efdbIn.DBInfo.Path) && exist(efdbIn.DBInfo.Path,'dir')
+                [filename,dirname]=uigetfile('*.efl','Open Analysis',efdbIn.DBInfo.Path);
             else
                 [filename,dirname]=uigetfile('*.efl','Open Analysis',pwd);
             end
         end
         if ~ischar(filename) || ~exist([dirname,filename],'file')
-            set(fh,'pointer','arrow');
+            set(fhIn,'pointer','arrow');
             return
         end
         
         %if this is not a new window with empty database then open a new
         %easyflow instance
-        if ~isempty(mArgsIn.TubeDB) || ~isempty(mArgsIn.GraphDB)
+        if ~isempty(efdbIn.TubeDB) || ~isempty(efdbIn.GraphDB)
             eval([mfilename '(''' [dirname,filename] ''')'])
             return
         end
         
         readargs=load('-mat',[dirname,filename]);
+        %move these into updateversion when having a new version
+        %until here        
         if isfield(readargs,'sArgs')
             sArgs=readargs.sArgs;
-            if ischar(dirname) && exist(dirname,'dir')
-                sArgs.DBFile.Path=dirname;
+            %update the file to the new version
+            oldmArgsIn=efdbIn;
+            if ~isfield(sArgs,'version') || sArgs.version~=curversion
+                sArgs=UpdateVersion(sArgs);
+                if isempty(sArgs)
+                    guidata(fhIn,oldmArgsIn);
+                    set(fhIn,'pointer','arrow');
+                    return;
+                end
             end
-            sArgs.DBFile.Name=[dirname,filename];
-            sArgs.DBFile.isChanged=0;
+            if ischar(dirname) && exist(dirname,'dir')
+                sArgs.DBInfo.Path=dirname;
+            end
+            sArgs.DBInfo.Name=[dirname,filename];
+            sArgs.DBInfo.isChanged=0;
             %if needed change paths to absolute
-            if isfield(sArgs.DBFile,'RootFolder')
+            if isfield(sArgs.DBInfo,'RootFolder')
                 sArgs=rel2abspath(sArgs);
             end
             %add the handles
-            sArgs.Handles=mArgsIn.Handles;
+            sArgs.Handles=efdbIn.Handles;
             %set up either the loaded tubeDB or load the saved one
             if ~isfield(sArgs,'TubeDB')
-                if isempty(mArgsIn.TubeDB)
+                if isempty(efdbIn.TubeDB)
                     msgbox('File does not contain tubes. Please load the tubes first.','EasyFlow','error','modal');
                     uiwait;
                     return
                 else
                     button='Current';
                 end
-            elseif ~isempty(mArgsIn.TubeDB)
+            elseif ~isempty(efdbIn.TubeDB)
                 button = questdlg('Load saved tubes or use current?.','Load Session','Saved', 'Current', 'Saved');
-                set(fh,'pointer','watch');
+                set(fhIn,'pointer','watch');
             else
                 button='Saved';
             end
@@ -1107,6 +1119,7 @@ set(fh,'Visible','on');
                 newdir=pwd;
                 tic; ntot=length(sArgs.TubeDB);
                 h=waitbar(0,'Loading Tubes...');
+                tmpTubeDB=cell(length(sArgs.TubeDB),1);
                 for i=1:length(sArgs.TubeDB)
                     if exist([sArgs.TubeDB(i).tubepath filesep sArgs.TubeDB(i).tubefile],'file')
                         fcsfile=fcsload([sArgs.TubeDB(i).tubepath filesep sArgs.TubeDB(i).tubefile]);
@@ -1120,8 +1133,8 @@ set(fh,'Visible','on');
                             foundall=0;
                             continue
                         else
-                            tmpnewdir=uigetdir(sArgs.DBFile.Path,'Select Samples Folder');
-                            sArgs.DBFile.Path=tmpnewdir;
+                            tmpnewdir=uigetdir(sArgs.DBInfo.Path,'Select Samples Folder');
+                            sArgs.DBInfo.Path=tmpnewdir;
                             fcsfile=fcsload([tmpnewdir filesep sArgs.TubeDB(i).tubefile]);
                             usenewdir=1;
                             newdir=tmpnewdir;
@@ -1131,9 +1144,10 @@ set(fh,'Visible','on');
                         foundall=0;
                         continue
                     end
-                    tmpTubeDB(i)=LoadTube(fcsfile);
+                    tmpTubeDB{i}=LoadTube(fcsfile);
                     waitbar(i/ntot,h,['Loading Tubes (' num2str(ceil(toc*(ntot/i-1))) ' sec)']);
                 end
+                tmpTubeDB=cell2mat(tmpTubeDB);
                 close(h);
                 if foundall==0
                     msgbox('Some tubes were not opend successfully.','EasyFlow','error','modal');
@@ -1149,61 +1163,48 @@ set(fh,'Visible','on');
                     sArgs.TubeDB=[];
                 end
             else
-                sArgs.TubeDB=mArgsIn.TubeDB;
+                sArgs.TubeDB=efdbIn.TubeDB;
             end
             
         else
-            sArgs=mArgsIn;
+            sArgs=efdbIn;
         end
-        guidata(fh,sArgs)
-        oldmArgsIn=mArgsIn;
-        mArgsIn=guidata(fh);
+        guidata(fhIn,sArgs)
+        efdbIn=guidata(fhIn);
         % reread the tubes
-        if ~isempty(mArgsIn.TubeDB)
-            mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
+        if ~isempty(efdbIn.TubeDB)
+            efdbIn.TubeNames=[{'None'};[efdbIn.TubeDB.Tubename]'];
         else
-            mArgsIn.TubeNames=[{'None'}];
+            efdbIn.TubeNames={'None'};
         end
-        set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
-        set(mArgsIn.Handles.CtrlPUM,'String',mArgsIn.TubeNames);
-        %update the file to the new version
-        if ~isfield(mArgsIn,'version') || mArgsIn.version~=curversion
-            mArgsIn=UpdateVersion(mArgsIn);
-            if isempty(mArgsIn)
-                guidata(fh,oldmArgsIn);
-                set(fh,'pointer','arrow');
-                return;
-            end
-        end
-        %move these into updateversion when having a new version
-        %until here
+        set(efdbIn.Handles.TubePUM,'String',efdbIn.TubeNames);
         
         % initialize GraphDB and set all DataDeconv to []
-        if isfield(mArgsIn.GraphDB,'DataDeconv')
-            mArgsIn.GraphDB=rmfield(mArgsIn.GraphDB,'DataDeconv');
-            mArgsIn.GraphDB(mArgsIn.curGraph(1)).DataDeconv=[];
+        if isfield(efdbIn.GraphDB,'DataDeconv')
+            efdbIn.GraphDB=rmfield(efdbIn.GraphDB,'DataDeconv');
+            efdbIn.GraphDB(efdbIn.curGraph(1)).DataDeconv=[];
         end
         %read the graph list
-        if isfield(mArgsIn.GraphDB,'Name')
-            List={mArgsIn.GraphDB.Name};
-            set(mArgsIn.Handles.GraphList,'String',List);
-            set(mArgsIn.Handles.GraphList,'Value',mArgsIn.curGraph);
+        if isfield(efdbIn.GraphDB,'Name')
+            List={efdbIn.GraphDB.Name};
+            set(efdbIn.Handles.GraphList,'String',List);
+            set(efdbIn.Handles.GraphList,'Value',efdbIn.curGraph);
         end
         %update the gate list
-        UpdateGateList(mArgsIn);
-        guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,[],fh);
-        set(fh,'pointer','arrow')
-        [name ,name]=fileparts(mArgsIn.DBFile.Name);
-        set(fh,'Name',['EasyFlow - FACS Analysis Tool (' name ')'])
+        UpdateGateList(efdbIn);
+        guidata(fhIn,efdbIn);
+        GraphListCallback(efdbIn.Handles.GraphList,[]);
+        set(fhIn,'pointer','arrow')
+        [~ ,name]=fileparts(efdbIn.DBInfo.Name);
+        set(fhIn,'Name',['EasyFlow - FACS Analysis Tool (' name ')'])
         %resize the gui to the saved configuration
-        fhResizeFcn(fh,eventdata)
+        fhResizeFcn(fhIn,eventdata)
         %finally, if I just opened the file, ischanged=0;
-        mArgsIn=guidata(fh);
-        mArgsIn.DBFile.isChanged=0;
-        guidata(fh,mArgsIn);
+        efdbIn=guidata(fhIn);
+        efdbIn.DBInfo.isChanged=0;
+        guidata(fhIn,efdbIn);
     end
-    function FileSaveCallback(hObject,eventdata,fh)
+    function SessionSaveCallback(~,~)
         mArgsIn=guidata(fh);
         sArgs=mArgsIn;
         %remove raw data and handles before saving
@@ -1211,23 +1212,24 @@ set(fh,'Visible','on');
         sArgs.TubeDB=rmfield(sArgs.TubeDB,'compdata');
         sArgs=rmfield(sArgs,'Handles');
         %if needed change paths to relative
-        if isfield(sArgs.DBFile,'RootFolder')
+        if isfield(sArgs.DBInfo,'RootFolder')
             sArgs=abs2relpath(sArgs);
         end
-        sArgs.DBFile.Path='';
-        sArgs.DBFile.Name='';
-        if ~isfield(mArgsIn,'DBFile') || ~isfield(mArgsIn.DBFile,'Name') || ~exist(mArgsIn.DBFile.Name,'file')
+        sArgs.DBInfo.Path='';
+        sArgs.DBInfo.Name='';
+        sArgs.DBInfo.enabled_gui='';
+        if ~isfield(mArgsIn,'DBInfo') || ~isfield(mArgsIn.DBInfo,'Name') || ~exist(mArgsIn.DBInfo.Name,'file')
             msgbox('No file selected. Use Save As.','EasyFlow','error','modal');
             uiwait;
             return
         end
-        mArgsIn.DBFile.isChanged=0;
-        save(mArgsIn.DBFile.Name,'sArgs');
+        mArgsIn.DBInfo.isChanged=0;
+        save(mArgsIn.DBInfo.Name,'sArgs');
         guidata(fh,mArgsIn);
-        [~ ,name]=fileparts(mArgsIn.DBFile.Name);
+        [~ ,name]=fileparts(mArgsIn.DBInfo.Name);
         set(fh,'Name',['EasyFlow - FACS Analysis Tool (' name ')'])
     end
-    function FileSaveAsCallback(hObject,eventdata,fh)
+    function SessionSaveAsCallback(~,~)
         mArgsIn=guidata(fh);
         sArgs=mArgsIn;
         %remove raw data and handles before saving
@@ -1235,62 +1237,57 @@ set(fh,'Visible','on');
         sArgs.TubeDB=rmfield(sArgs.TubeDB,'compdata');
         sArgs=rmfield(sArgs,'Handles');
         %if needed change paths to relative
-        if isfield(sArgs.DBFile,'RootFolder')
+        if isfield(sArgs.DBInfo,'RootFolder')
             sArgs=abs2relpath(sArgs);
         end
-        sArgs.DBFile.Path='';
-        sArgs.DBFile.Name='';
-        if isfield(mArgsIn.DBFile,'Path') && ischar(mArgsIn.DBFile.Path) && exist(mArgsIn.DBFile.Path,'dir')
-            [file,path] = uiputfile('*.efl','Save As',mArgsIn.DBFile.Path);
+        sArgs.DBInfo.Path='';
+        sArgs.DBInfo.Name='';
+        sArgs.DBInfo.enabled_gui='';
+        if isfield(mArgsIn.DBInfo,'Path') && ischar(mArgsIn.DBInfo.Path) && exist(mArgsIn.DBInfo.Path,'dir')
+            [file,path] = uiputfile('*.efl','Save As',mArgsIn.DBInfo.Path);
         else
             [file,path] = uiputfile('*.efl','Save As',pwd);
         end
         if ischar(path) && exist(path,'dir')
-            mArgsIn.DBFile.Path=path;
+            mArgsIn.DBInfo.Path=path;
         end
-        mArgsIn.DBFile.Name=[path,file];
-        save(mArgsIn.DBFile.Name,'sArgs');
-        mArgsIn.DBFile.isChanged=0;
+        mArgsIn.DBInfo.Name=[path,file];
+        save(mArgsIn.DBInfo.Name,'sArgs');
+        mArgsIn.DBInfo.isChanged=0;
         guidata(fh,mArgsIn);
-        [~ ,name]=fileparts(mArgsIn.DBFile.Name);
+        [~ ,name]=fileparts(mArgsIn.DBInfo.Name);
         set(fh,'Name',['EasyFlow - FACS Analysis Tool (' name ')'])
     end
-    function FileSaveWSCallback(hObject,eventdata,fh)
+    function SessionExportCallback(~,~)
         mArgsIn=guidata(fh);
         export2wsdlg({'Save MetaData as:'},{'mArgsIn'},{mArgsIn});
         guidata(fh,mArgsIn)
     end
-    function FileUseRelPath(hObject,eventdata,fh)
+    function SessionUseRelPath(~,~)
         mArgsIn=guidata(fh);
+        MenuFileRelpath=findobj(fh,'Label','Use Relative Path');
         if strcmp(MenuFileRelpath.Checked,'off')
             MenuFileRelpath.Checked='on';
-            mArgsIn.DBFile.RootFolder='.';
-            mArgsIn.DBFile.isChanged=1;
+            mArgsIn.DBInfo.RootFolder='.';
+            mArgsIn.DBInfo.isChanged=1;
         else
             MenuFileRelpath.Checked='off';
-            mArgsIn.DBFile=rmfield(mArgsIn.DBFile,'RootFolder');
-            mArgsIn.DBFile.isChanged=1;
+            mArgsIn.DBInfo=rmfield(mArgsIn.DBInfo,'RootFolder');
+            mArgsIn.DBInfo.isChanged=1;
         end
         guidata(fh,mArgsIn)
     end
-    function SampleCallback(hObject,eventdata)
-        mArgsIn=guidata(fh);
-        menuobj=get(hObject,'Children');
-        set(menuobj,'Enable','on');
-        if isempty(mArgsIn.TubeDB)
-            set(menuobj,'Enable','off');
-        end
-    end
-    function SampleLoadCallback(hObject,eventdata,fh)
+
+    function SampleLoadCallback(~,~)
         set(fh,'pointer','watch');
         mArgsIn=guidata(fh);
-        if isfield(mArgsIn,'DBFile') && isfield(mArgsIn.DBFile,'Path') && ischar(mArgsIn.DBFile.Path) && exist(mArgsIn.DBFile.Path,'dir')
-            [filename,dirname]=uigetfile('*.fcs','Open Tubes',mArgsIn.DBFile.Path,'MultiSelect','on');
+        if isfield(mArgsIn,'DBInfo') && isfield(mArgsIn.DBInfo,'Path') && ischar(mArgsIn.DBInfo.Path) && exist(mArgsIn.DBInfo.Path,'dir')
+            [filename,dirname]=uigetfile('*.fcs','Open Tubes',mArgsIn.DBInfo.Path,'MultiSelect','on');
         else
             [filename,dirname]=uigetfile('*.fcs','Open Tubes',pwd,'MultiSelect','on');
         end
         if ischar(dirname) && exist(dirname,'dir')
-            mArgsIn.DBFile.Path=dirname;
+            mArgsIn.DBInfo.Path=dirname;
         end
         if ischar(filename)
             filename={filename};
@@ -1312,19 +1309,10 @@ set(fh,'Visible','on');
             % use filname and make a tubename field
             ctube=LoadTube(fcsfile);
             if ~isempty(mArgsIn.TubeDB)
-                %automatically make tubename unique such that it makes the
-                %while loop unecessary
+                %automatically make tubename unique
                 tubename=matlab.lang.makeUniqueStrings(ctube.Tubename{1},[mArgsIn.TubeDB.Tubename]);
                 ctube.fcsfile=fcssetparam(ctube.fcsfile,'TUBE NAME',tubename);
                 ctube.Tubename{1}=tubename;
-                while any(strcmp([mArgsIn.TubeDB.Tubename],ctube.Tubename{1}))
-                    display('If you ever see this, let yaron know. 2015/03/10')
-                    %tubename already exists, continue or rename
-                    tubename=char(inputdlg(['Can''t open ' ctube.tubefile '. Tube name ' ctube.Tubename{1} ' already exists. Rename?']...
-                        ,'EasyFlow',1,ctube.Tubename));
-                    ctube.fcsfile=fcssetparam(ctube.fcsfile,'TUBE NAME',tubename);
-                    ctube.Tubename{1}=tubename;
-                end
 
                 if isempty(ctube.Tubename{1})
                     continue
@@ -1338,7 +1326,7 @@ set(fh,'Visible','on');
             mArgsIn.TubeDB(end+1)=ctube;
             % if this tube already appears in the graphDB then recalc gated
             % data
-            if isfield(mArgsIn,'curGraph');
+            if isfield(mArgsIn,'curGraph') && ~isempty(mArgsIn.curGraph)
                 tmpcur=mArgsIn.curGraph;
                 mArgsIn.curGraph=find(strcmp({mArgsIn.GraphDB.Name},mArgsIn.TubeDB(end).Tubename));
                 mArgsIn=CalculateGatedData(mArgsIn);
@@ -1350,18 +1338,78 @@ set(fh,'Visible','on');
         close(h);
         mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
         set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
-        set(mArgsIn.Handles.CtrlPUM,'String',mArgsIn.TubeNames);
         guidata(fh,mArgsIn);
         set(fh,'pointer','arrow');
     end
-    function TubeSaveCallback(hObject,eventdata)
+    function FolderLoadCallback(~,~)
+        set(fh,'pointer','watch');
+        mArgsIn=guidata(fh);
+        if isfield(mArgsIn,'DBInfo') && isfield(mArgsIn.DBInfo,'Path') && ischar(mArgsIn.DBInfo.Path) && exist(mArgsIn.DBInfo.Path,'dir')
+            dirname=uigetdir(mArgsIn.DBInfo.Path,'Open Tubes');
+        else
+            dirname=uigetdir(pwd,'Open Tubes');
+        end
+        if exist(dirname,'dir')
+            mArgsIn.DBInfo.Path=dirname;
+        end
+        filename = dir([dirname, filesep, '**', filesep, '*.fcs'])';
+        tic; ntot=length(filename); loopnum=0;
+        h=waitbar(0,'Loading Tubes...','WindowStyle','modal');
+        for curfilestruct=filename
+            dirname = curfilestruct.folder;
+            curfile = curfilestruct.name;
+            if ~exist([dirname filesep char(curfile)],'file')
+                continue
+            end
+            fcsfile=fcsload([dirname filesep char(curfile)]);
+            if isempty(fcsfile)
+                continue
+            end
+            % the TUBE NAME is the field by which the tube is named, if not
+            % use filname and make a tubename field
+            ctube=LoadTube(fcsfile);
+            if ~isempty(mArgsIn.TubeDB)
+                %automatically make tubename unique
+                tubename=matlab.lang.makeUniqueStrings(ctube.Tubename{1},[mArgsIn.TubeDB.Tubename]);
+                ctube.fcsfile=fcssetparam(ctube.fcsfile,'TUBE NAME',tubename);
+                ctube.Tubename{1}=tubename;
+
+
+                if isempty(ctube.Tubename{1})
+                    continue
+                elseif any(strcmp(strcat({mArgsIn.TubeDB.tubepath},{mArgsIn.TubeDB.tubefile}),[ctube.tubepath ctube.tubefile]))
+                    %there is a different tube with the same file path.
+                    msgbox(['Can''t open file ' fcsfile.filename '. The file is already open.'],'EasyFlow','error','modal');
+                    uiwait;
+                    continue;
+                end
+            end
+            mArgsIn.TubeDB(end+1)=ctube;
+            % if this tube already appears in the graphDB then recalc gated
+            % data
+            if isfield(mArgsIn,'curGraph') && ~isempty(mArgsIn.curGraph)
+                tmpcur=mArgsIn.curGraph;
+                mArgsIn.curGraph=find(strcmp({mArgsIn.GraphDB.Name},mArgsIn.TubeDB(end).Tubename));
+                mArgsIn=CalculateGatedData(mArgsIn);
+                mArgsIn.curGraph=tmpcur;
+            end
+            loopnum=loopnum+1;
+            waitbar(loopnum/ntot,h,['Loading Tubes (' num2str(ceil(toc*(ntot/loopnum-1))) ' sec)']);
+        end
+        close(h);
+        mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
+        set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
+        guidata(fh,mArgsIn);
+        set(fh,'pointer','arrow');
+    end
+    function TubeSaveCallback(~,~)
         mArgsIn=guidata(fh);
         button = questdlg('Do you really want to overwrite tube data files? you should save an original version of the files.', 'Save Tubes', 'Save', 'Cancel', 'Cancel');
         if strcmp(button,'Save')
             fcssave([mArgsIn.TubeDB.fcsfile],1);
         end
     end
-    function TubeShowPrmCallback(hObject,eventdata)
+    function TubeShowPrmCallback(~,~)
         mArgsIn=guidata(fh);
         S=mArgsIn.TubeNames(2:end);
         if isempty(S)
@@ -1379,7 +1427,7 @@ set(fh,'Visible','on');
             guidata(fh,mArgsIn);
         end
     end
-    function TubeRemoveCallback(hObject,eventdata)
+    function TubeRemoveCallback(~,eventdata)
         mArgsIn=guidata(fh);
         if ~isfield(mArgsIn.TubeDB,'Tubename')
             msgbox('No open tubes were found.','EasyFlow','error','modal');
@@ -1397,17 +1445,16 @@ set(fh,'Visible','on');
             % remove it from the TubeDB structures
             mArgsIn.TubeDB=mArgsIn.TubeDB(setdiff(1:length(S),Selection));
             if isfield(mArgsIn,'GatesDB')
-                mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,intersect(genvarname(S(Selection)),fieldnames(mArgsIn.GatesDB)));
+                mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,intersect(matlab.lang.makeValidName(S(Selection)),fieldnames(mArgsIn.GatesDB)));
             end
             mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
             set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
-            set(mArgsIn.Handles.CtrlPUM,'String',mArgsIn.TubeNames);
         end
         %reread graphs
         guidata(fh,mArgsIn);
-        GraphListCallback(GraphList,eventdata,fh)
+        GraphListCallback(mArgsIn.Handles.GraphList,eventdata)
     end
-    function TubeRenameCallback(hObject,eventdata)
+    function TubeRenameCallback(~,~)
         mArgsIn=guidata(fh);
         S=mArgsIn.TubeNames(2:end);
         if isempty(S)
@@ -1441,18 +1488,17 @@ set(fh,'Visible','on');
                 if ~isempty(mArgsIn.GraphDB)
                     [mArgsIn.GraphDB(strcmp({mArgsIn.GraphDB.Data},S(i))).Data]=deal(strrep(char(renamerule), '$', S{i}));
                 end
-                if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,genvarname(S(i)))
-                    mArgsIn.GatesDB.(genvarname(strrep(char(renamerule), '$', S{i})))=mArgsIn.GatesDB.(genvarname(S{i}));
-                    mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,genvarname(S{i}));
+                if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,matlab.lang.makeValidName(S(i)))
+                    mArgsIn.GatesDB.(matlab.lang.makeValidName(strrep(char(renamerule), '$', S{i})))=mArgsIn.GatesDB.(matlab.lang.makeValidName(S{i}));
+                    mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,matlab.lang.makeValidName(S{i}));
                 end
             end
             mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
             set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
-            set(mArgsIn.Handles.CtrlPUM,'String',mArgsIn.TubeNames);
             guidata(fh,mArgsIn);
         end
     end
-    function FileTubeRenameCallback(hObject,eventdata)
+    function FileTubeRenameCallback(~,~)
         mArgsIn=guidata(fh);
         S=mArgsIn.TubeNames(2:end);
         if isempty(S)
@@ -1461,15 +1507,15 @@ set(fh,'Visible','on');
             return;
         end
         % open an xls file with the renaming
-        if isfield(mArgsIn,'DBFile') && isfield(mArgsIn.DBFile,'Path') && ischar(mArgsIn.DBFile.Path) && exist(mArgsIn.DBFile.Path,'dir')
-            [xlsfilename,targetdir]=uigetfile('.xlsx','Open Template',mArgsIn.DBFile.Path);
+        if isfield(mArgsIn,'DBInfo') && isfield(mArgsIn.DBInfo,'Path') && ischar(mArgsIn.DBInfo.Path) && exist(mArgsIn.DBInfo.Path,'dir')
+            [xlsfilename,targetdir]=uigetfile('.xlsx','Open Template',mArgsIn.DBInfo.Path);
         else
             [xlsfilename,targetdir]=uigetfile('.xlsx','Open Template',pwd);
         end
-        if ~isstr(targetdir)
+        if ~ischar(targetdir)
             return
         end
-        mArgsIn.DBFile.Path=targetdir;
+        mArgsIn.DBInfo.Path=targetdir;
         enabled_gui=findobj(fh,'Enable','on');
         set(enabled_gui,'Enable','off');
         set(fh,'pointer','watch');
@@ -1501,20 +1547,19 @@ set(fh,'Visible','on');
             if ~isempty(mArgsIn.GraphDB)
                 [mArgsIn.GraphDB(strcmp({mArgsIn.GraphDB.Data},S(tubenum))).Data]=deal(newtubename{1});
             end
-            if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,genvarname(S(tubenum)))
-                mArgsIn.GatesDB.(genvarname(newtubename{1}))=mArgsIn.GatesDB.(genvarname(S{tubenum}));
-                mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,genvarname(S{tubenum}));
+            if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,matlab.lang.makeValidName(S(tubenum)))
+                mArgsIn.GatesDB.(matlab.lang.makeValidName(newtubename{1}))=mArgsIn.GatesDB.(matlab.lang.makeValidName(S{tubenum}));
+                mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,matlab.lang.makeValidName(S{tubenum}));
             end
         end
         
         mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
         set(mArgsIn.Handles.TubePUM,'String',mArgsIn.TubeNames);
-        set(mArgsIn.Handles.CtrlPUM,'String',mArgsIn.TubeNames);
         guidata(fh,mArgsIn);
         set(fh,'pointer','arrow')
         set(enabled_gui,'Enable','on');
     end
-    function TubeCompCallback(hObject,eventdata,fh)
+    function TubeCompCallback(~,~)
         v=version('-release');
         v=str2double(v(1:end-1));
         if v<2008
@@ -1524,16 +1569,16 @@ set(fh,'Visible','on');
         end
         EasyFlow_compensation(fh);
         mArgsIn=guidata(fh);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function TubePrmCallback(hObject,eventdata,fh)
+    function TubePrmCallback(~,~)
         mArgsIn=guidata(fh);
 %        newfcs=fcsedit([mArgsIn.TubeDB.fcsfile])
-%        mArgsIn.DBFile.isChanged=1;
+%        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function TubeAddParam(hObject,eventdata)
+    function TubeAddParam(~,~)
         set(fh,'pointer','watch');
         mArgsIn=guidata(fh);
         %select the tubes for which we want to add the new parameter
@@ -1558,8 +1603,9 @@ set(fh,'Visible','on');
         %calculated param say CP8 so the next one is CP9. 
         cprmnum=max(... find the maximum of all calculated parameter numbers
             cellfun(... for every tube in tubeindex
-            @(tubex) max([0 cellfun(@(x) str2num(x(3)), ...get the character after the CP
-            mArgsIn.TubeDB(1).parname(~cellfun(@isempty, strfind(tubex,'CP'))))])+1 ...for every parname with 'CP'
+            @(tubex) max([0 cellfun(@(x) str2double(x(3)), ...get the character after the CP
+            ...mArgsIn.TubeDB(1).parname( ~cellfun(@isempty, strfind(tubex,'CP')) ))])+1 ...for every parname with 'CP'
+            mArgsIn.TubeDB(1).parname(contains(tubex,'CP')) )])+1 ...for every parname with 'CP'
             ,{mArgsIn.TubeDB(Selection).parname}));
         for i=Selection
             mArgsIn.TubeDB(i).parname{end+1}=['CP' num2str(cprmnum)];
@@ -1608,30 +1654,11 @@ set(fh,'Visible','on');
 
         end
         guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,[],fh)
+        GraphListCallback(mArgsIn.Handles.GraphList,[])
         set(fh,'pointer','arrow')
     end
 
-    function ToolsCallback(hObject,eventdata)
-        mArgsIn=guidata(fh);
-        set(get(hObject,'Children'),'Enable','on');
-        if isempty(mArgsIn.GraphDB)
-            set(get(hObject,'Children'),'Enable','off');
-            set(findobj(hObject,'Label','Add all tubes'),'Enable','on');
-        elseif strcmp(mArgsIn.Display.graph_type,'Histogram')
-            set(findobj(hObject,'Label','Load Fit'),'Enable','on');
-            if isscalar(mArgsIn.curGraph)
-                set(findobj(hObject,'Label','New Fit'),'Enable','on');
-            else
-                set(findobj(hObject,'Label','New Fit'),'Enable','off');
-            end
-        else
-            set(findobj(hObject,'Label','Load Fit'),'Enable','off');
-            set(findobj(hObject,'Label','New Fit'),'Enable','off');
-        end
-        guidata(fh,mArgsIn);
-    end
-    function ToolsBatch(hObject,eventdata)
+    function ToolsBatch(~,~)
         mArgsIn=guidata(fh);
         inpstr=inputdlg({'Replace (regexp allowed)','With'},'Batch conversion',[1,5]');
         if isempty(inpstr)
@@ -1643,21 +1670,21 @@ set(fh,'Visible','on');
         GraphDB=fcsbatch(mArgsIn.GraphDB(mArgsIn.curGraph),str1,str2);
         mArgsIn.GraphDB=[mArgsIn.GraphDB,GraphDB];
         set(mArgsIn.Handles.GraphList,'String',{mArgsIn.GraphDB.Name});
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         
         %recalculate gates for the new graphs
         tic;
         curGraph=mArgsIn.curGraph;
         h=waitbar(0,'Loading...');
         loop_length=length(mArgsIn.GraphDB)-initial_tubenum;
-        for i=(initial_tubenum+1):length(mArgsIn.GraphDB);
+        for i=(initial_tubenum+1):length(mArgsIn.GraphDB)
             mArgsIn.curGraph=i;
-            if ~isfield(mArgsIn,'GatesDB') || ~isfield(mArgsIn.GatesDB,char((genvarname(mArgsIn.GraphDB(mArgsIn.curGraph).Data))))
+            if ~isfield(mArgsIn,'GatesDB') || ~isfield(mArgsIn.GatesDB,char((matlab.lang.makeValidName(mArgsIn.GraphDB(mArgsIn.curGraph).Data))))
                 mArgsIn.GraphDB(mArgsIn.curGraph).Gates={};
             else
                 mArgsIn.GraphDB(mArgsIn.curGraph).Gates=intersect(...
                     mArgsIn.GraphDB(mArgsIn.curGraph).Gates,...
-                    fieldnames(mArgsIn.GatesDB.(genvarname(mArgsIn.GraphDB(1).Data))));
+                    fieldnames(mArgsIn.GatesDB.(matlab.lang.makeValidName(mArgsIn.GraphDB(1).Data))));
             end
             mArgsIn=CalculateGatedData(mArgsIn);
             timeleft=toc*(loop_length/(i-initial_tubenum)-1);
@@ -1667,32 +1694,34 @@ set(fh,'Visible','on');
         mArgsIn.curGraph=curGraph;
         guidata(fh,mArgsIn)
     end
-    function ToolsAddall(hObject,eventdata)
+    function ToolsAddall(~,eventdata)
         mArgsIn=guidata(fh);
         curgraph=length(mArgsIn.GraphDB)+1;
         %reselect selected graphs to save their configuration
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh);
+        GraphListCallback(mArgsIn.Handles.GraphList,eventdata);
         for tubename=mArgsIn.TubeNames(2:end)'
             mArgsIn=AddGraph(mArgsIn,[],tubename{1});
         end
         mArgsIn.curGraph=curgraph:length(mArgsIn.GraphDB);
-                
+        set(mArgsIn.Handles.GraphList,'Value',mArgsIn.curGraph);
+
         mArgsIn=CalculateGatedData(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         mArgsIn=DataChange(mArgsIn);
         guidata(fh,mArgsIn);
-        GraphListCallback(mArgsIn.Handles.GraphList,eventdata,fh)
+        GraphListCallback(mArgsIn.Handles.GraphList,eventdata)
+        mArgsIn=guidata(fh);
         mArgsIn=CalculateMarkers(mArgsIn);
         guidata(fh,mArgsIn);
     end
-    function ToolsNewFit(hObject,eventdata)
+    function ToolsNewFit(~,~)
         mArgsIn=guidata(fh);
         f=mArgsIn.GraphDB(mArgsIn.curGraph(1)).plotdata(:,1);
         h=mArgsIn.GraphDB(mArgsIn.curGraph(1)).plotdata(:,2);
         cftool(f,h);
         guidata(fh,mArgsIn)
     end
-    function ToolsApplyFit(hObject,eventdata)
+    function ToolsApplyFit(~,~)
         mArgsIn=guidata(fh);
         vars=evalin('base','who');
         vars=vars(cellfun(@(x) isa(evalin('base',x),'fittype'),vars));
@@ -1718,16 +1747,17 @@ set(fh,'Visible','on');
         end
         guidata(fh,mArgsIn)
     end
-    function ToolsRemFit(hObject,eventdata)
+    function ToolsRemFit(~,~)
         mArgsIn=guidata(fh);
         [mArgsIn.GraphDB(mArgsIn.curGraph).fit]=deal([]);
+        mArgsIn = DrawGraphs(mArgsIn);
         guidata(fh,mArgsIn)
-        DrawGraphs(fh);
     end
-    function ToolsExport(hObject,eventdata)
+    function ToolsExport(~,~)
         mArgsIn=guidata(fh);
-        output={};
-        for graph=mArgsIn.curGraph
+        output=cell(length(mArgsIn.curGraph),1);
+        for i=1:length(mArgsIn.curGraph)
+            graph=mArgsIn.curGraph(i);
             gateddata=[];
             pname=[];
             tubeidx=find(strcmp([mArgsIn.TubeDB.Tubename],mArgsIn.GraphDB(graph).Data),1,'first');
@@ -1735,16 +1765,16 @@ set(fh,'Visible','on');
                 gateddata=mArgsIn.TubeDB(tubeidx).compdata(mArgsIn.GraphDB(graph).gatedindex,:);
                 pname=mArgsIn.TubeDB(tubeidx).parsymbol;
             end
-            output(end+1).Data=gateddata;
-            output(end).Name=mArgsIn.GraphDB(graph).Name;
-            output(end).ParamName=pname;
+            output{i}.Data=gateddata;
+            output{i}.Name=mArgsIn.GraphDB(graph).Name;
+            output{i}.ParamName=pname;
         end
-        export2wsdlg({'Save Data as:'},{'Output'},{output});
+        export2wsdlg({'Save Data as:'},{'Output'},{cell2mat(output)}); % if problem remove the 'cell2mat'
     end
-    function StatWinCallback(hObject,eventdata,fh)
+    function StatWinCallback(~,~)
         EasyFlow_statwin(fh);
     end
-    function ViewSetup(hObject,eventdata)
+    function ViewSetup(~,~)
         mArgsIn=guidata(fh);
         StatNames={'Count','Mean','Median','rSD','Std','% of total','% of gate','Quadrants','Fit'};
         Num_stat=length(StatNames);
@@ -1782,7 +1812,7 @@ set(fh,'Visible','on');
                     'Callback',{@SetShowInStatView});
             end
         end
-        btngrp_quad=uibuttongroup(...
+        uibuttongroup(...
             'Units','pixels',...
             'Position',[0,25,300,size_y-25-20*ceil(Num_stat/2)-25],...
             'Title','Choose the Quadrants Statistics:');
@@ -1796,7 +1826,7 @@ set(fh,'Visible','on');
         
         set(h,'visible','on')
         
-        function SetShowInStatView(hObject,eventdata)
+        function SetShowInStatView(hObject,~)
             mArgsIn=guidata(fh);
             objects=findobj(get(hObject,'Parent'),'Style','checkbox');
             vals=get(objects,'value');
@@ -1813,7 +1843,51 @@ set(fh,'Visible','on');
         end
 
     end
-    function HelpAbout(hObject,eventdata)
+    function HelpKeys(~,~)
+        h=figure('Position',[0,0,400,140],...
+            'MenuBar','none',...
+            'Name','EasyFlow Keyboard Shortcuts',...
+            'NumberTitle','off',...
+            'Visible','off');
+        
+        shortcut_keys={...
+            'Ctrl-A',...
+            'Ctrl-C',...
+            ''};
+        shortcut_desc={...
+            'Rename graphs with sample name',...
+            'Assign defult colors',...
+            ''};
+        
+        hTitle=uicontrol(h,'Style','text',...
+            'Position',[0,100,400,40],...
+            'FontSize',20,...
+            'FontWeight','bold',...
+            'String',' Keyboard Shortcuts ');
+        hKeys=uicontrol(h,'Style','text',...
+            'Position',[0,0,90,100],...
+            'FontSize',10,...
+            'HorizontalAlignment','right',...
+            'String',shortcut_keys);
+        hDesc=uicontrol(h,'Style','text',...
+            'Position',[110,0,300,100],...
+            'FontSize',10,...
+            'HorizontalAlignment','left',...
+            'String',shortcut_desc);
+
+        hspace=20;
+        hKeys.Position(3)=hKeys.Extent(3);
+        hDesc.Position(1)=hKeys.Position(1)+hKeys.Position(3)+hspace;
+        hDesc.Position(3)=hDesc.Extent(3);
+        hTitle.Position(3)=max(hTitle.Extent(3),hKeys.Extent(3)+hDesc.Extent(3)+hspace);
+        h.Position(3)=hTitle.Position(3);
+        movegui(h,'center');
+
+        set(h,'Visible','on')
+        
+        
+    end
+    function HelpAbout(~,~)
         h=figure('Position',[0,0,300,140],...
             'MenuBar','none',...
             'Name','About EasyFlow',...
@@ -1845,7 +1919,7 @@ set(fh,'Visible','on');
             'Position',[0,40,300,20],...
             'FontSize',10,...
             'FontWeight','normal',...
-            'String',['Version ', sprintf('%.2f',3.17), ' ', versiondate]);
+            'String',['Version ', sprintf('%.2f',curversion), ' ', versiondate]);
         uicontrol(h,'Style','text',...
             'Position',[0,20,300,20],...
             'FontSize',10,...
@@ -1862,65 +1936,10 @@ set(fh,'Visible','on');
         
     end
 
-    function StatMarker(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        markername=['M' num2str(1+length(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Markers))];
-        markername=char(inputdlg('Marker name:','Add Gate',1,{markername}));
-        % check that the name is non empty and doesn't exist already.
-        if isempty(gatename)
-            return;
-        end
-        if isfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Markers,markername)
-            msgbox('A marker with this name already exists.','EasyFlow','error','modal');
-            uiwait;
-            return;
-        end
-        switch mArgsIn.Display.graph_type
-            case 'Histogram'
-                lingate=gate1d;
-                %do the necessary transformation on the values of the gate to make
-                %them linear
-                switch mArgsIn.Display.graph_Xaxis
-                    case 'log'
-                        lingate=10.^lingate;
-                    case 'logicle'
-                        lingate=2*sinh(log(10)*lingate)/mArgsIn.Display.graph_Xaxis_param(3);
-                end
-                mArgsIn.GraphDB(mArgsIn.curGraph(1)).Markers.(markername)=lingate;
-                %             otherwise
-                %                 lingate=gate2d;
-                %                 %do the necessary transformation on the values of the gate to make
-                %                 %them linear
-                %                 switch mArgsIn.Display.graph_Xaxis
-                %                     case 'log'
-                %                         lingate(1,:)=10.^lingate(1,:);
-                %                     case 'logicle'
-                %                         lingate(1,:)=2*sinh(log(10)*lingate(1,:))/mArgsIn.Display.graph_Xaxis_param(3);
-                %                 end
-                %                 switch mArgsIn.Display.graph_Yaxis
-                %                     case 'ylog'
-                %                         lingate(2,:)=10.^lingate(2,:);
-                %                     case 'ylogicle'
-                %                         lingate(2,:)=2*sinh(log(10)*lingate(2,:))/mArgsIn.Display.graph_Yaxis_param(3);
-                %                 end
-                %                 mArgsIn.GraphDB(mArgsIn.curGraph(1)).Markers.(markername)=lingate;
-        end
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
-    end
-
-    function ACM(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        if strcmp(mArgsIn.Display.graph_type,'Histogram')
-            set(findobj(hObject,'Label','Quadrants'),'Enable','off');
-        else
-            set(findobj(hObject,'Label','Quadrants'),'Enable','on');
-        end
-    end
-    function ACM_graphprop(hObject,eventdata,fh)
+    function ACM_graphprop(~,~)
         EasyFlow_figprop(fh);
     end
-    function ACM_fixaxis(hObject,eventdata,fh)
+    function ACM_fixaxis(~,~)
         mArgsIn=guidata(fh);
         if strcmp(get(gcbo, 'Checked'),'on')
             if isfield(mArgsIn.Display,'Axis')
@@ -1933,10 +1952,10 @@ set(fh,'Visible','on');
             set(gcbo, 'Checked', 'on');
         end
         mArgsIn.Display.Changed=1;
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function ACM_setquad(hObject,eventdata,fh)
+    function ACM_setquad(~,~)
         mArgsIn=guidata(fh);
         [x,y]=ginput(1);
         %rescale the coordinates to its linear scale values
@@ -1957,16 +1976,16 @@ set(fh,'Visible','on');
         end
         mArgsIn=CalculateMarkers(mArgsIn);
         DrawQuads(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function ACM_cpquad(hObject,eventdata,fh)
+    function ACM_cpquad(~,~)
         mArgsIn=guidata(fh);
         mArgsIn.copy.quad=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat.quad;
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function ACM_pastequad(hObject,eventdata,fh)
+    function ACM_pastequad(~,~)
         mArgsIn=guidata(fh);
         if isfield(mArgsIn,'copy') && isfield(mArgsIn.copy,'quad')
             for cgraph=mArgsIn.curGraph
@@ -1975,235 +1994,228 @@ set(fh,'Visible','on');
         end
         mArgsIn=CalculateMarkers(mArgsIn);
         DrawQuads(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(fh,mArgsIn)
     end
-    function ACM_rmquad(hObject,eventdata,fh)
+    function ACM_rmquad(~,~)
         mArgsIn=guidata(fh);
         mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat=rmfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat,'quad');
         delete(findobj(gca,'Tag','quad'));
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         mArgsIn=CalculateMarkers(mArgsIn);
         guidata(fh,mArgsIn)
     end
-    function ACM_DrawToFigure(hObject,eventdata,fh)
-        DrawToFigure(fh);
+    function ACM_DrawToFigure(hObject,~)
+        efdb=efdb_load(hObject);
+        DrawToFigure(efdb);
     end
-    function MenuGates(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        submenu=get(hObject,'Children');
-        gatesvalue=get(get(mArgsIn.Handles.GateList,'Children'),'Value');
-        if iscell(gatesvalue)
-            gatesvalue=cell2mat(gatesvalue);
-        end
-        if sum(gatesvalue)==1
-            set(submenu(strcmp(get(submenu,'Label'),'Make Global')),'Enable','on');
-        else
-            set(submenu(strcmp(get(submenu,'Label'),'Make Global')),'Enable','off');
-        end
-        %4/3/2009
-        %mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
-    end
-    function MenuGatesLGate(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        alldata=[];
-        dilute=1;
-        for tube=1:length(mArgsIn.TubeDB)
-            alldata=[alldata; mArgsIn.TubeDB(tube).compdata(1:dilute:end,1:2)];
-            alldata=alldata(alldata(:,1)>0 & alldata(:,2)>0,:);
-            if length(alldata)>500000
-                alldata=alldata(1:2:end,:);
-                dilute=dilute*2;
-            end
-        end
-        alldata=alldata(alldata(:,1)>0 & alldata(:,2)>0,:);
-        dilute=max(1,round(length(alldata)/100000));
-        h=figure;
-        fcscontour(alldata(1:dilute:end,1),alldata(1:dilute:end,2),'contour');
-        gate{1}=gate2d;
-        delete(h);
-        if size(gate{1},2)<3
-            msgbox('The lymphogate doesn''t have enough points.','EasyFlow','error','modal');
-            uiwait;
-            return;
-        end
-        gate(3:4)= {mArgsIn.TubeDB(2).parname(1), mArgsIn.TubeDB(2).parname(2)};
-        for tube=mArgsIn.TubeNames(2:end)'
-            mArgsIn.GatesDB.(genvarname(char(tube))).lymphogate=gate;
-            tubeidx=find(strcmp([mArgsIn.TubeDB.Tubename],tube),1,'first');
-            colorind(1)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,gate{3}),1,'first');
-            colorind(2)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,gate{4}),1,'first');
-            mArgsIn.GatesDB.(genvarname(char(tube))).lymphogate{2}=gate2d(gate{1},mArgsIn.TubeDB(tubeidx).compdata,colorind(1),colorind(2));
-        end
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+
+    function MenuGatesAddGate(hObject,~)
+        efdbIn=efdb_load(hObject);
+        efdbIn=disable_gui(efdbIn);
         
-        %reselect the new lymphogate
-        holdgate=findobj(mArgsIn.Handles.GateList,'Tag','lymphogate');
-        if ~isempty(holdgate)
-            GateListCallback(holdgate,eventdata,fh)
-        else
-            UpdateGateList(mArgsIn);
-        end
-    end
-    function MenuGatesAddGate(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        curtubes=genvarname(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Data}));
-        gatename=char(inputdlg('Gate name:','Add Gate'));
-        % check that the name is non empty and valid and doesn't exist already.
-        if isempty(gatename)
-            return;
-        end
-        if ~isvarname(gatename)
-            msgbox('The gate name is invalid. use only a letter followed by letters and numbers.','EasyFlow','error','modal');
+        %
+        %check parameters and determine the gate name
+        %
+        %check that all plots have the same axis
+        allplots_color={efdbIn.GraphDB(efdbIn.curGraph).Color};
+        if size(unique(cell2mat(allplots_color(:)),'rows'),1)~= 1
+            %not all plots have the same x-axis. 
+            %cannot create a gate
+            msgbox('All plots should have the same X-axis.','EasyFlow','error','modal');
             uiwait;
+            enable_gui(efdbIn);
             return;
         end
-        if isfield(mArgsIn,'GatesDB') && sum(isfield(mArgsIn.GatesDB,curtubes))
-            allgates=arrayfun(@(x) fieldnames(mArgsIn.GatesDB.(char(x)))',curtubes(isfield(mArgsIn.GatesDB,curtubes)),'UniformOutput',0);
-            allgates=[allgates{:}];
-            if any(strcmp(allgates,gatename))
-                msgbox('A gate with this name already exists.','EasyFlow','error','modal');
+        if ~strcmp(efdbIn.Display.graph_type,'Histogram')
+            %need also to check the y axis
+            allplots_color={efdbIn.GraphDB(efdbIn.curGraph).Color2};
+            if size(unique(cell2mat(allplots_color(:)),'rows'),1)~= 1
+                %not all plots have the same y-axis.
+                %cannot create a gate
+                msgbox('All plots should have the same Y-axis.','EasyFlow','error','modal');
                 uiwait;
+                enable_gui(efdbIn);
                 return;
             end
         end
-        liston=findobj(gcf,'Enable','on');
-        set(liston,'Enable','off');
-        switch mArgsIn.Display.graph_type
+        gatename=char(inputdlg('Gate name:','Add Gate',1));
+        % check that the name is non empty and valid and doesn't exist already.
+        if isempty(gatename)
+            enable_gui(efdbIn);
+            return;
+        end
+        if ~isvarname(gatename)
+            msgbox('The gate name is invalid. It should containt leters and numbers and start with a letter.','EasyFlow','error','modal');
+            uiwait;
+            enable_gui(efdbIn);
+            return;
+        end
+        if isfield(efdbIn,'GatesDBnew')
+            allgates=fieldnames(efdbIn.GatesDBnew);
+            if any(strcmp(allgates,gatename))
+                msgbox('A gate with this name already exists.','EasyFlow','error','modal');
+                uiwait;
+                enable_gui(efdbIn);
+                return;
+            end
+        end
+        
+        %
+        %create the gate
+        %
+        switch efdbIn.Display.graph_type
             case 'Histogram'
+                %define the gate
                 lingate=gate1d;
                 %do the necessary transformation on the values of the gate to make
                 %them linear
-                switch mArgsIn.Display.graph_Xaxis
+                switch efdbIn.Display.graph_Xaxis
                     case 'log'
                         lingate(1:2)=10.^lingate(1:2);
                     case 'logicle'
-                        lingate(1:2)=2*sinh(log(10)*lingate(1:2))/mArgsIn.Display.graph_Xaxis_param(3);
+                        lingate(1:2)=2*sinh(log(10)*lingate(1:2))/efdbIn.Display.graph_Xaxis_param(3);
                 end
-                for tube=curtubes
-                    mArgsIn.GatesDB.(char(tube)).(gatename){1}=lingate;
-                    %note: take the colorname from the first tube. check?
-                    mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color;
-                    tubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-                    colorind=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color),1,'first');
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=mArgsIn.TubeDB(tubeidx).compdata(:,colorind)>lingate(1) ...
-                        & mArgsIn.TubeDB(tubeidx).compdata(:,colorind)<lingate(2);
-                    mArgsIn.GatesDB.(char(tube)).(gatename){4}=[];
-                end
+                %create the gate structure
+                new_gate{1}=lingate;
+                new_gate{2}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+                new_gate{3}='1D';
+                %add to the GatesDB 
+                efdbIn.GatesDBnew.(gatename)=new_gate;
             otherwise
+                %define the gate
                 lingate=gate2d;
                 %do the necessary transformation on the values of the gate to make
                 %them linear
-                switch mArgsIn.Display.graph_Xaxis
+                switch efdbIn.Display.graph_Xaxis
                     case 'log'
                         lingate(1,:)=10.^lingate(1,:);
                     case 'logicle'
-                        lingate(1,:)=2*sinh(log(10)*lingate(1,:))/mArgsIn.Display.graph_Xaxis_param(3);
+                        lingate(1,:)=2*sinh(log(10)*lingate(1,:))/efdbIn.Display.graph_Xaxis_param(3);
                 end
-                switch mArgsIn.Display.graph_Yaxis
+                switch efdbIn.Display.graph_Yaxis
                     case 'ylog'
                         lingate(2,:)=10.^lingate(2,:);
                     case 'ylogicle'
-                        lingate(2,:)=2*sinh(log(10)*lingate(2,:))/mArgsIn.Display.graph_Yaxis_param(3);
+                        lingate(2,:)=2*sinh(log(10)*lingate(2,:))/efdbIn.Display.graph_Yaxis_param(3);
                 end
-                for tube=curtubes
-                    mArgsIn.GatesDB.(char(tube)).(gatename){1}=lingate;
-                    mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color;
-                    mArgsIn.GatesDB.(char(tube)).(gatename){4}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2;
-
-                    tubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-                    colorind(1)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color),1,'first');
-                    colorind(2)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2),1,'first');
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=gate2d(lingate,mArgsIn.TubeDB(tubeidx).compdata,colorind(1),colorind(2));
-                end
+                %create the gate structure
+                new_gate{1}=lingate;
+                new_gate{2}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+                new_gate{3}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color2;
+                %add to the GatesDB 
+                efdbIn.GatesDBnew.(gatename)=new_gate;
         end
-        set(liston,'Enable','on');
-        UpdateGateList(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+%removed on 2020_01_14. should be deleteable.
+        % apply the gate to all tubes 
+%        for cur_tube_indx=1:length(efdbIn.TubeDB)
+%            gatemask=calculate_gate_mask(efdbIn.TubeDB(cur_tube_indx),new_gate);
+%            efdbIn.TubeDB(cur_tube_indx).gatemask.(gatename)=gatemask;
+%        end
+        % Update the GUI component
+        UpdateGateList(efdbIn);
+        %DrawGraphs(fh);
+        efdbIn=enable_gui(efdbIn);
+        efdb_save(efdbIn);
     end
-    function MenuGatesAddContourGate(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        curtubes=genvarname(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Data}));
+    function MenuGatesAddContourGate(hObject,~)
+        efdbIn=efdb_load(hObject);
+        efdbIn=disable_gui(efdbIn);
+        
+        %
+        %check parameters and determine the gate name
+        %
+        %contour only works in 2d
+        if strcmp(efdbIn.Display.graph_type,'Histogram')
+            msgbox('A gate with this name already exists.','EasyFlow','error','modal');
+            uiwait;
+            return;
+        end        
+        %check that all plots have the same x and y axis
+        allplots_color={efdbIn.GraphDB(efdbIn.curGraph).Color};
+        if size(unique(cell2mat(allplots_color(:)),'rows'),1)~= 1
+            %not all plots have the same x-axis. 
+            %cannot create a gate
+            msgbox('All plots should have the same X-axis.','EasyFlow','error','modal');
+            uiwait;
+            enable_gui(efdbIn);
+            return;
+        end
+        allplots_color={efdbIn.GraphDB(efdbIn.curGraph).Color2};
+        if size(unique(cell2mat(allplots_color(:)),'rows'),1)~= 1
+            %not all plots have the same y-axis.
+            %cannot create a gate
+            msgbox('All plots should have the same Y-axis.','EasyFlow','error','modal');
+            uiwait;
+            enable_gui(efdbIn);
+            return;
+        end
         gatename=char(inputdlg('Gate name:','Add Gate'));
         % check that the name is non empty and valid and doesn't exist already.
         if isempty(gatename)
+            enable_gui(efdbIn);
             return;
         end
         if ~isvarname(gatename)
             msgbox('The gate name is invalid. use only a letter followed by letters and numbers.','EasyFlow','error','modal');
             uiwait;
+            enable_gui(efdbIn);
             return;
         end
-        if isfield(mArgsIn,'GatesDB') && sum(isfield(mArgsIn.GatesDB,curtubes))
-            allgates=arrayfun(@(x) fieldnames(mArgsIn.GatesDB.(char(x)))',curtubes(isfield(mArgsIn.GatesDB,curtubes)),'UniformOutput',0);
-            allgates=[allgates{:}];
+        if isfield(efdbIn,'GatesDBnew')
+            allgates=fieldnames(efdbIn.GatesDBnew);
             if any(strcmp(allgates,gatename))
                 msgbox('A gate with this name already exists.','EasyFlow','error','modal');
                 uiwait;
+                enable_gui(efdbIn);
                 return;
             end
         end
-        liston=findobj(gcf,'Enable','on');
-        set(liston,'Enable','off');
-        switch mArgsIn.Display.graph_type
-            case 'Histogram'
-                lingate=gate1d;
-                %do the necessary transformation on the values of the gate to make
-                %them linear
-                switch mArgsIn.Display.graph_Xaxis
-                    case 'log'
-                        lingate(1:2)=10.^lingate(1:2);
-                    case 'logicle'
-                        lingate(1:2)=2*sinh(log(10)*lingate(1:2))/mArgsIn.Display.graph_Xaxis_param(3);
-                end
-                for tube=curtubes
-                    mArgsIn.GatesDB.(char(tube)).(gatename){1}=lingate;
-                    %note: take the colorname from the first tube. check?
-                    mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color;
-                    tubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-                    colorind=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color),1,'first');
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=mArgsIn.TubeDB(tubeidx).compdata(:,colorind)>lingate(1) ...
-                        & mArgsIn.TubeDB(tubeidx).compdata(:,colorind)<lingate(2);
-                    mArgsIn.GatesDB.(char(tube)).(gatename){4}=[];
-                end
-            otherwise
-                lingate=gate2d_cntr;
-                %do the necessary transformation on the values of the gate to make
-                %them linear
-                switch mArgsIn.Display.graph_Xaxis
-                    case 'log'
-                        lingate(1,:)=10.^lingate(1,:);
-                    case 'logicle'
-                        lingate(1,:)=2*sinh(log(10)*lingate(1,:))/mArgsIn.Display.graph_Xaxis_param(3);
-                end
-                switch mArgsIn.Display.graph_Yaxis
-                    case 'ylog'
-                        lingate(2,:)=10.^lingate(2,:);
-                    case 'ylogicle'
-                        lingate(2,:)=2*sinh(log(10)*lingate(2,:))/mArgsIn.Display.graph_Yaxis_param(3);
-                end
-                for tube=curtubes
-                    mArgsIn.GatesDB.(char(tube)).(gatename){1}=lingate;
-                    mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color;
-                    mArgsIn.GatesDB.(char(tube)).(gatename){4}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2;
-
-                    tubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-                    colorind(1)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color),1,'first');
-                    colorind(2)=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2),1,'first');
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=gate2d(lingate,mArgsIn.TubeDB(tubeidx).compdata,colorind(1),colorind(2));
-                end
+        
+        %
+        %create the gate
+        %
+        %define the gate
+        lingate=gate2d_cntr;
+        %do the necessary transformation on the values of the gate to make
+        %them linear
+        switch efdbIn.Display.graph_Xaxis
+            case 'log'
+                lingate(1,:)=10.^lingate(1,:);
+            case 'logicle'
+                lingate(1,:)=2*sinh(log(10)*lingate(1,:))/efdbIn.Display.graph_Xaxis_param(3);
         end
-        set(liston,'Enable','on');
-        UpdateGateList(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+        switch efdbIn.Display.graph_Yaxis
+            case 'ylog'
+                lingate(2,:)=10.^lingate(2,:);
+            case 'ylogicle'
+                lingate(2,:)=2*sinh(log(10)*lingate(2,:))/efdbIn.Display.graph_Yaxis_param(3);
+        end
+        %create the gate structure
+        new_gate{1}=lingate;
+        new_gate{2}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+        new_gate{3}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color2;
+        %add to the GatesDB
+        efdbIn.GatesDBnew.(gatename)=new_gate;
+        
+        % apply the gate to all tubes
+        for cur_tube_indx=1:length(efdbIn.TubeDB)
+            gatemask=calculate_gate_mask(efdbIn.TubeDB(cur_tube_indx),new_gate);
+            efdbIn.TubeDB(cur_tube_indx).gatemask.(gatename)=gatemask;
+        end
+        % Update the GUI component
+        UpdateGateList(efdbIn);
+        
+        efdbIn=enable_gui(efdbIn);
+        efdb_save(efdbIn);
     end
-    function MenuGatesAddLogicalGate(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        curtubes=genvarname(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Data}));
+    function MenuGatesAddLogicalGate(hObject,~)
+        efdbIn=efdb_load(hObject);
+        efdbIn=disable_gui(efdbIn);
+
+        %
+        %check parameters and determine the gate name
+        %
         gatename=char(inputdlg('Gate name:','Add Logical Gate'));
         % check that the name is non empty and valid and doesn't exist already.
         if isempty(gatename)
@@ -2212,37 +2224,37 @@ set(fh,'Visible','on');
         if ~isvarname(gatename)
             msgbox('The gate name is invalid. use only a letter followed by letters and numbers.','EasyFlow','error','modal');
             uiwait;
+            enable_gui(efdbIn);
             return;
         end
-        if isfield(mArgsIn,'GatesDB') && sum(isfield(mArgsIn.GatesDB,curtubes))
-            allgates=arrayfun(@(x) fieldnames(mArgsIn.GatesDB.(char(x)))',curtubes(isfield(mArgsIn.GatesDB,curtubes)),'UniformOutput',0);
-            allgates=[allgates{:}];
+        if isfield(efdbIn,'GatesDBnew')
+            allgates=fieldnames(efdbIn.GatesDBnew);
             if any(strcmp(allgates,gatename))
                 msgbox('A gate with this name already exists.','EasyFlow','error','modal');
                 uiwait;
+                enable_gui(efdbIn);
                 return;
             end
         end
-        liston=findobj(gcf,'Enable','on');
-        set(liston,'Enable','off');     
-        %find the gates that apear in all selected tubes
-        [allgates,ans,ans]=unique(allgates);
-        commongates=allgates(hist(ans,1:length(allgates))==length(curtubes));
+        
+        
         %select gates and logical operation
-        if isempty(commongates)
-            msgbox('No common gates were found.','EasyFlow','error','modal');
+        if isempty(allgates)
+            msgbox('No gates were found.','EasyFlow','error','modal');
             uiwait;
+            enable_gui(efdbIn);
             return;
         end
-        [Selection,ok] = listdlg('ListString',commongates,'Name','Select Gates','PromptString','Select gates','OKString','OK');
+        [Selection,ok] = listdlg('ListString',allgates,'Name','Select Gates','PromptString','Select gates','OKString','OK');
         if ok~=1
-            set(liston,'Enable','on');  
+            enable_gui(efdbIn);
             return
         end
         switch length(Selection)
             case 0
                 msgbox('No gates were selected.','EasyFlow','error','modal');
                 uiwait;
+                enable_gui(efdbIn);
                 return;
             case 1
                 logical_op={'Not'};
@@ -2253,44 +2265,34 @@ set(fh,'Visible','on');
         end
         [OpSelection,ok] = listdlg('ListString',logical_op,'Name','Select Operation','PromptString','Select logical operation','OKString','OK','SelectionMode','single');
         if ok~=1
-            set(liston,'Enable','on');  
+            enable_gui(efdbIn);
             return
         end
-        
-        for tube=curtubes
-            mArgsIn.GatesDB.(char(tube)).(gatename){1}=logical_op{OpSelection};
-            mArgsIn.GatesDB.(char(tube)).(gatename){3}=commongates(Selection);
-            mArgsIn.GatesDB.(char(tube)).(gatename){4}='logical';
-            switch mArgsIn.GatesDB.(char(tube)).(gatename){1}
-                case 'Not'
-                    cgate=mArgsIn.GatesDB.(char(tube)).(gatename){3};
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=not(mArgsIn.GatesDB.(char(tube)).(char(cgate)){2});
-                case 'Xor'
-                    cgate1=mArgsIn.GatesDB.(char(tube)).(gatename){3}(1);
-                    cgate2=mArgsIn.GatesDB.(char(tube)).(gatename){3}(2);
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=xor(mArgsIn.GatesDB.(char(tube)).(char(cgate1)){2},mArgsIn.GatesDB.(char(tube)).(char(cgate2)){2});
-                case 'And'
-                    gate_ind=true(size(mArgsIn.GatesDB.(char(tube)).(char(mArgsIn.GatesDB.(char(tube)).(gatename){3}(1))){2}));
-                    for cgate=mArgsIn.GatesDB.(char(tube)).(gatename){3}
-                        gate_ind=and(gate_ind,mArgsIn.GatesDB.(char(tube)).(char(cgate)){2});
-                    end
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=gate_ind;
-                case 'Or'
-                    gate_ind=false(size(mArgsIn.GatesDB.(char(tube)).(char(mArgsIn.GatesDB.(char(tube)).(gatename){3}(1))){2}));
-                    for cgate=mArgsIn.GatesDB.(char(tube)).(gatename){3}
-                        gate_ind=or(gate_ind,mArgsIn.GatesDB.(char(tube)).(char(cgate)){2});
-                    end
-                    mArgsIn.GatesDB.(char(tube)).(gatename){2}=gate_ind;
-            end
+        %create the gate structure
+        new_gate{1}=logical_op{OpSelection};
+        new_gate{2}=allgates(Selection);
+        new_gate{3}='logical';
+        %add to the GatesDB
+        efdbIn.GatesDBnew.(gatename)=new_gate;
+
+        % apply the gate to all tubes
+        for cur_tube_indx=1:length(efdbIn.TubeDB)
+            gatemask=calculate_gate_mask(efdbIn.TubeDB(cur_tube_indx),new_gate);
+            efdbIn.TubeDB(cur_tube_indx).gatemask.(gatename)=gatemask;
         end
-        set(liston,'Enable','on');
-        UpdateGateList(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
+        % Update the GUI component
+        UpdateGateList(efdbIn);
+        
+        efdbIn=enable_gui(efdbIn);
+        efdb_save(efdbIn);
     end
-    function MenuGatesAddArtifactsGate(hObject,eventdata,fh)
-        mArgsIn=guidata(fh);
-        curtubes=genvarname(unique({mArgsIn.GraphDB(mArgsIn.curGraph).Data}));
+    function MenuGatesAddArtifactsGate(hObject,~)
+        efdbIn=efdb_load(hObject);
+        efdbIn=disable_gui(efdbIn);
+
+        %
+        %check parameters and determine the gate name
+        %
         gatename=char(inputdlg('Gate name:','Add Artifacts Gate'));
         % check that the name is non empty and valid and doesn't exist already.
         if isempty(gatename)
@@ -2301,46 +2303,159 @@ set(fh,'Visible','on');
             uiwait;
             return;
         end
-        if isfield(mArgsIn,'GatesDB') && sum(isfield(mArgsIn.GatesDB,curtubes))
-            allgates=arrayfun(@(x) fieldnames(mArgsIn.GatesDB.(char(x)))',curtubes(isfield(mArgsIn.GatesDB,curtubes)),'UniformOutput',0);
-            allgates=[allgates{:}];
+        if isfield(efdbIn,'GatesDBnew')
+            allgates=fieldnames(efdbIn.GatesDBnew);
             if any(strcmp(allgates,gatename))
                 msgbox('A gate with this name already exists.','EasyFlow','error','modal');
                 uiwait;
+                enable_gui(efdbIn);
                 return;
             end
         end
-        liston=findobj(gcf,'Enable','on');
-        set(liston,'Enable','off');     
         
-        for tube=curtubes
-            %note: take the colorname from the first tube. check?
-            if strcmp(mArgsIn.Display.graph_type,'Histogram')
-                mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color;
-                disp_scale=mArgsIn.Display.graph_Xaxis;
-                disp_par=mArgsIn.Display.graph_Xaxis_param(3);
-            else
-                mArgsIn.GatesDB.(char(tube)).(gatename){3}=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color2;
-                disp_scale=mArgsIn.Display.graph_Yaxis(2:end);
-                disp_par=mArgsIn.Display.graph_Yaxis_param(3);
-            end
-            mArgsIn.GatesDB.(char(tube)).(gatename){1}={disp_scale,disp_par};
-            mArgsIn.GatesDB.(char(tube)).(gatename){4}='artifact';
-            tubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-            colorind=find(strcmp(mArgsIn.TubeDB(tubeidx).parname,mArgsIn.GatesDB.(char(tube)).(gatename){3}),1,'first');
-            %use the current display settings to scale the data. maybe to ask?
-            scaleddata=fcsscaleconvert(mArgsIn.TubeDB(tubeidx).compdata(:,colorind),'lin',1, disp_scale, disp_par);
-            mArgsIn.GatesDB.(char(tube)).(gatename){2}=fcsartifact(scaleddata);
+        %take the y axis unless it is a 1d histogram
+        if strcmp(efdbIn.Display.graph_type,'Histogram')
+            colorname=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+            disp_scale=efdbIn.Display.graph_Xaxis;
+            disp_par=efdbIn.Display.graph_Xaxis_param(3);
+        else
+            colorname=efdbIn.GraphDB(efdbIn.curGraph(1)).Color2;
+            disp_scale=efdbIn.Display.graph_Yaxis(2:end);
+            disp_par=efdbIn.Display.graph_Yaxis_param(3);
         end
-        set(liston,'Enable','on');
-        UpdateGateList(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
-        guidata(fh,mArgsIn)
-    end
-    function MenuGatesEditor(hObject,eventdata,fh)
-        EasyFlow_gateedit(fh);
-    end
+        %create the gate structure
+        new_gate{1}={disp_scale,disp_par};
+        new_gate{2}=colorname;
+        new_gate{3}='artifact';
+        %add to the GatesDB
+        efdbIn.GatesDBnew.(gatename)=new_gate;
 
+        % apply the gate to all tubes
+        for cur_tube_indx=1:length(efdbIn.TubeDB)
+            gatemask=calculate_gate_mask(efdbIn.TubeDB(cur_tube_indx),new_gate);
+            efdbIn.TubeDB(cur_tube_indx).gatemask.(gatename)=gatemask;
+        end
+        % Update the GUI component
+        UpdateGateList(efdbIn);
+        
+        efdbIn=enable_gui(efdbIn);
+        efdb_save(efdbIn);
+    end
+    function MenuGatesEditor(hObject,~)
+        efdbIn=efdb_load(hObject);
+        efdbIn=disable_gui(efdbIn);
+        gatename = get(gco,'Tag');
+        old_gate = efdbIn.GatesDBnew.(gatename);
+
+        switch efdbIn.Display.graph_type
+            case 'Histogram'
+                %make sure the color is proper
+                if ~strcmp(old_gate{2},efdbIn.GraphDB(efdbIn.curGraph(1)).Color) ...
+                        || ~strcmp(old_gate{3},'1D')
+                    msgbox(['wrong axis need ', old_gate{2}, ' and ', old_gate{3}],'EasyFlow','error','modal');
+                    uiwait;
+                    enable_gui(efdbIn);
+                    return;
+                end
+                efdbIn = remove_gates(gatename, efdbIn);
+                efdbIn = DrawGraphs(efdbIn);
+                %get the old gate values
+                lingate=old_gate{1};
+                %scale the numbers to the axis scaling
+                scalegate=[lin2scale(lingate(1:2), efdbIn.Display.graph_Xaxis, efdbIn.Display.graph_Xaxis_param),... 
+                    lin2scale(lingate(3), efdbIn.Display.graph_Yaxis, efdbIn.Display.graph_Yaxis_param)];
+                %define the new gate
+                scalegate = gate1d(scalegate);
+                %transform back to linear values
+                lingate=[scale2lin(scalegate(1:2), efdbIn.Display.graph_Xaxis, efdbIn.Display.graph_Xaxis_param),... 
+                    scale2lin(scalegate(3), efdbIn.Display.graph_Yaxis, efdbIn.Display.graph_Yaxis_param)];
+                %create the gate structure
+                new_gate{1}=lingate;
+                new_gate{2}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+                new_gate{3}='1D';
+                %add to the GatesDB 
+                efdbIn.GatesDBnew.(gatename)=new_gate;
+            otherwise
+                %make sure the color is proper
+                if ~strcmp(old_gate{2},efdbIn.GraphDB(efdbIn.curGraph(1)).Color) ...
+                        || ~strcmp(old_gate{3},efdbIn.GraphDB(efdbIn.curGraph(1)).Color2)
+                    msgbox(['wrong axis need ', old_gate{2}, ' and ', old_gate{3}],'EasyFlow','error','modal');
+                    uiwait;
+                    enable_gui(efdbIn);
+                    return;
+                end
+                efdbIn = remove_gates(gatename, efdbIn);
+                efdbIn = DrawGraphs(efdbIn);
+                %get the old gate values
+                lingate=old_gate{1};
+                %scale the numbers to the axis scaling
+                scalegate=[lin2scale(lingate(1,:), efdbIn.Display.graph_Xaxis, efdbIn.Display.graph_Xaxis_param);... 
+                    lin2scale(lingate(2,:), efdbIn.Display.graph_Yaxis, efdbIn.Display.graph_Yaxis_param)];
+
+                %define the gate
+                scalegate=gate2d(scalegate);
+                %transform back to linear values
+                lingate=[scale2lin(scalegate(1,:), efdbIn.Display.graph_Xaxis, efdbIn.Display.graph_Xaxis_param);... 
+                    scale2lin(scalegate(2,:), efdbIn.Display.graph_Yaxis, efdbIn.Display.graph_Yaxis_param)];
+                %create the gate structure
+                new_gate{1}=lingate;
+                new_gate{2}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color;
+                new_gate{3}=efdbIn.GraphDB(efdbIn.curGraph(1)).Color2;
+                %add to the GatesDB 
+                efdbIn.GatesDBnew.(gatename)=new_gate;
+        end
+        % Update the GUI component
+        UpdateGateList(efdbIn);
+        efdbIn=enable_gui(efdbIn);
+        efdb_save(efdbIn);
+    end
+    function MenuGatesRemove(hObject,~)
+        efdbIn=efdb_load(hObject);
+        gatename = get(gco,'Tag');
+        efdbIn = remove_gates(gatename, efdbIn);
+        efdbIn = DrawGraphs(efdbIn);
+        efdb_save(efdbIn);
+    end
+    function efdb = remove_gates(gatename, efdb)
+        efdb.GatesDBnew=rmfield(efdb.GatesDBnew,gatename);
+        %remove the gate from all graphs
+        for i=1:length(efdb.GraphDB)
+            efdb.GraphDB(i).Gates(strcmp(efdb.GraphDB(i).Gates,gatename))=[];
+            efdb.GraphDB(i).GatesOff(strcmp(efdb.GraphDB(i).GatesOff,gatename))=[];
+        end
+        %remove it from tubes
+        for i=1:length(efdb.TubeDB)
+            if isfield(efdb.TubeDB(i),'gatemask') && isfield(efdb.TubeDB(i).gatemask,gatename)
+                efdb.TubeDB(i).gatemask = rmfield(efdb.TubeDB(i).gatemask,gatename);
+            end
+        end
+        % recalculate gates state
+        curGraph = efdb.curGraph;
+        efdb.curGraph = 1:length(efdb.GraphDB);
+        efdb=CalculateGatedData(efdb);
+        efdb.curGraph = curGraph;
+        UpdateGateList(efdb);
+    end
+    function l = scale2lin(s,axis_scale, axis_param)
+        l=s;
+        switch axis_scale
+            case {'log', 'ylog'}
+                l=10.^s;
+            case {'logicle', 'ylogicle'}
+                l=2*sinh(log(10)*s)/axis_param(3);
+        end
+        
+    end
+    function s = lin2scale(l,axis_scale, axis_param)
+        s=l;
+        switch axis_scale
+            case {'log', 'ylog'}
+                s=log10(l);
+            case {'logicle', 'ylogicle'}
+                s=asinh(0.5*l*axis_param(3))/log(10);
+        end
+        
+    end
 %%  Functions for specific events
     function mArgsIn=DataChange(mArgsIn)
         %this function should be executed every time the data is changed,
@@ -2373,7 +2488,6 @@ set(fh,'Visible','on');
             mArgsIn.GraphDB(curGraph).DataDeconv=[];
             mArgsIn.GraphDB(curGraph).Gates={};
             mArgsIn.GraphDB(curGraph).GatesOff={};
-            %mArgsIn.GraphDB(curGraph).Markers={};
             mArgsIn.GraphDB(curGraph).Stat=struct;
             mArgsIn.GraphDB(curGraph).plotdata=[];
             mArgsIn.GraphDB(curGraph).gatedindex=[];
@@ -2391,7 +2505,6 @@ set(fh,'Visible','on');
             mArgsIn.GraphDB(curGraph).DataDeconv=mArgsIn.GraphDB(prevGraph).DataDeconv;
             mArgsIn.GraphDB(curGraph).Gates=mArgsIn.GraphDB(prevGraph).Gates;
             mArgsIn.GraphDB(curGraph).GatesOff=mArgsIn.GraphDB(prevGraph).GatesOff;
-            %mArgsIn.GraphDB(curGraph).Markers=mArgsIn.GraphDB(prevGraph).Markers;
             mArgsIn.GraphDB(curGraph).Stat=mArgsIn.GraphDB(prevGraph).Stat;
             mArgsIn.GraphDB(curGraph).plotdata=mArgsIn.GraphDB(prevGraph).plotdata;
             mArgsIn.GraphDB(curGraph).gatedindex=mArgsIn.GraphDB(prevGraph).gatedindex;
@@ -2401,43 +2514,38 @@ set(fh,'Visible','on');
         end
         set(mArgsIn.Handles.GraphList,'String',List);
         set(mArgsIn.Handles.GraphList,'Value',curGraph);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
     end
 
 %%  Utility functions for MYGUI
-    function DrawGraphs(fh)
+    function efdb = DrawGraphs(efdb)
         %Draw the graphs. use the mArgsIn.Display.graph_* parameters
         %mArgsIn.Display.graph_Xaxis can be 'lin' 'log' 'asinh' 'logicle'
         %mArgsIn.Display.graph_type can be 'Histogram','Dot Plot','Colored Dot
         %Plot','Contour','Filled Contour'
         %mArgsIn.Display.graph_Yaxis can be 'ylin' or 'ylog'
-        mArgsIn=guidata(fh);
         %set up the axis for plotting
-        set(0,'CurrentFigure',fh)
+        set(0,'CurrentFigure',efdb.Handles.fh)
         plot(1,1);
-        cla(mArgsIn.Handles.ax);
+        cla(efdb.Handles.ax);
         hold on;
-        switch mArgsIn.Display.graph_type
+        switch efdb.Display.graph_type
             case 'Histogram'
-                DrawHist(fh)
+                efdb = DrawHist(efdb);
             case {'Contour', 'Filled Contour', 'Dot Plot', 'Colored Dot Plot'}
-                Draw2D(fh)
+                efdb = Draw2D(efdb);
             otherwise
-                DrawHist(fh)
+                efdb = DrawHist(efdb);
         end
         hold off
-        % Recalc the statistics
-        mArgsIn=guidata(fh);
-        mArgsIn=CalculateMarkers(mArgsIn);
-        guidata(fh,mArgsIn)
+        efdb=CalculateMarkers(efdb);
     end
-    function DrawToFigure(fh)
+    function mArgsIn = DrawToFigure(mArgsIn)
         %Draw the graphs in a special figure. use the mArgsIn.Display.graph_* parameters
         %mArgsIn.Display.graph_Xaxis can be 'lin' 'log' 'asinh' 'logicle'
         %mArgsIn.Display.graph_type can be 'Histogram','Dot Plot','Colored Dot
         %Plot','Contour','Filled Contour'
         %mArgsIn.Display.graph_Yaxis can be 'ylin' or 'ylog'
-        mArgsIn=guidata(fh);
         %set up the axis for plotting
         hFig=figure;
         plottools(hFig);
@@ -2445,11 +2553,11 @@ set(fh,'Visible','on');
         hold on;
         switch mArgsIn.Display.graph_type
             case 'Histogram'
-                DrawHist(fh)
+                mArgsIn = DrawHist(mArgsIn);
             case {'Contour', 'Filled Contour', 'Dot Plot', 'Colored Dot Plot'}
-                Draw2D(fh)
+                mArgsIn = Draw2D(mArgsIn);
             otherwise
-                DrawHist(fh)
+                mArgsIn = DrawHist(mArgsIn);
         end
         hold off
         %set font size to 12 and typeface to Arial
@@ -2467,15 +2575,17 @@ set(fh,'Visible','on');
         set(h,'FontName','Arial');
 
     end
-    function DrawHist(fh)
+    function mArgsIn = DrawHist(mArgsIn)
         %Draw histograms.
         %go over all selected graphs and draws them.
         %if no Ctrl only draws the data.
         %if have Ctrl, cna either draw both or do deconvolution.
-        mArgsIn=guidata(fh);
-        lgnd={};
         no_data_graphs=[];
-        for graph=get(mArgsIn.Handles.GraphList,'Value');
+        allgraphs=get(mArgsIn.Handles.GraphList,'Value');
+        lgnd=cell(1,length(allgraphs));
+        lgnd_len = 0;
+        for i=1:length(allgraphs)
+            graph=allgraphs(i);
             if isfield(mArgsIn.TubeDB,'Tubename')
                 tubeidx=find(strcmp([mArgsIn.TubeDB.Tubename],mArgsIn.GraphDB(graph).Data),1,'first');
             else
@@ -2496,7 +2606,8 @@ set(fh,'Visible','on');
                 continue
             end
             % add the graphname to the legend
-            lgnd{end+1}=mArgsIn.GraphDB(graph).Name;
+            lgnd_len = lgnd_len +1;
+            lgnd{lgnd_len}=mArgsIn.GraphDB(graph).Name;
             %create the plotdata and the control data
             gateddata=mArgsIn.TubeDB(tubeidx).compdata(mArgsIn.GraphDB(graph).gatedindex,:);
             mArgsIn.GraphDB(graph).plotdata=gateddata(:,colorind);
@@ -2585,11 +2696,9 @@ set(fh,'Visible','on');
             msgbox(['The graphs ''' no_data_graphs ''' contain no data.'],'EasyFlow','error','modal');
             uiwait;
         end
-        guidata(fh,mArgsIn)
     end
-    function Draw2D(fh)
+    function mArgsIn = Draw2D(mArgsIn)
         %Draw 2d contours
-        mArgsIn=guidata(fh);
         no_data_graphs=[];
         if isscalar(mArgsIn.curGraph) || strcmp(mArgsIn.Display.graph_type,'Dot Plot')
             for graph=mArgsIn.curGraph
@@ -2657,7 +2766,6 @@ set(fh,'Visible','on');
                 1,2,...
                 mArgsIn.Display.graph_type,mArgsIn.Display.graph_Xaxis,mArgsIn.Display.graph_Xaxis_param,mArgsIn.Display.graph_Yaxis,mArgsIn.Display.graph_Yaxis_param);
         end
-        guidata(fh,mArgsIn);
         if isfield(mArgsIn.Display,'Axis')
             axis(mArgsIn.Display.Axis);
         else
@@ -2673,7 +2781,7 @@ set(fh,'Visible','on');
         xlabel(getcolumn(get(mArgsIn.Handles.ColorPUM,'string')',get(mArgsIn.Handles.ColorPUM,'value')));
         ylabel(getcolumn(get(mArgsIn.Handles.ColorPUM,'string')',get(mArgsIn.Handles.Color2PUM,'value')));
     end
-    function DrawQuads(mArgsIn)
+    function mArgsIn = DrawQuads(mArgsIn)
         quad=mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat.quad;
         posx=mArgsIn.GraphDB(mArgsIn.curGraph(1)).plotdata(:,1)>quad(1);
         posy=mArgsIn.GraphDB(mArgsIn.curGraph(1)).plotdata(:,2)>quad(2);
@@ -2712,46 +2820,46 @@ set(fh,'Visible','on');
     end
 
     function UpdateGateList(mArgsIn)
-        % display the gate list in the gui.
-        if ~isfield(mArgsIn,'curGraph') || ~isfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)),'Gates')
+        % Populate the gate list component in the gui.
+        if ~isfield(mArgsIn,'curGraph') || isempty(mArgsIn.curGraph) || ~isfield(mArgsIn.GraphDB(mArgsIn.curGraph(1)),'Gates')
             return
         end
         
         %get the indices of the selected and unselected gates.
-        selected=[]; unselected=[]; both=[];
-        tubeGates={};
+        selected=[]; unselected=[];
+        allGates=fieldnames(mArgsIn.GatesDBnew);
         for cgraph=mArgsIn.curGraph
-            curtube=genvarname(mArgsIn.GraphDB(cgraph).Data);
+            curtube=matlab.lang.makeValidName(mArgsIn.GraphDB(cgraph).Data);
             if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,curtube)
-                [tubeGates,m,n]=unique([tubeGates; cell(fieldnames(mArgsIn.GatesDB.(curtube)))]);
-                selected=n(selected)'; unselected=n(unselected)';
+                [allGates,~,inew]=unique([allGates; cell(fieldnames(mArgsIn.GatesDB.(curtube)))]);
+                selected=inew(selected)'; unselected=inew(unselected)';
             end
             for gate=mArgsIn.GraphDB(cgraph).Gates
-                if isempty(gate) || ~any(strcmp(gate,tubeGates));
+                if isempty(gate) || ~any(strcmp(gate,allGates));
                     mArgsIn.GraphDB(cgraph).Gates(strcmp(mArgsIn.GraphDB(cgraph).Gates,gate))=[];
                     continue
                 end
-                selected(end+1)=find(strcmp(gate,tubeGates));
+                selected(end+1)=find(strcmp(gate,allGates));
             end
             for gate=mArgsIn.GraphDB(cgraph).GatesOff
-                if isempty(gate) || ~any(strcmp(gate,tubeGates));
+                if isempty(gate) || ~any(strcmp(gate,allGates));
                     mArgsIn.GraphDB(cgraph).GatesOff(strcmp(mArgsIn.GraphDB(cgraph).GatesOff,gate))=[];
                     continue
                 end
-                unselected=[find(strcmp(gate,tubeGates)) unselected];
+                unselected=[find(strcmp(gate,allGates)) unselected];
             end
         end
         %find those that appear as selected in all graphs
-        tmp=find(hist(selected,1:length(tubeGates))==length(mArgsIn.curGraph));
+        tmp=find(hist(selected,1:length(allGates))==length(mArgsIn.curGraph));
         %the others are both selected and unselected
         both=setdiff(unique(selected),tmp);
         %take those in tmp but in the order they first apear in tmp (the
         %order for the last tube)
-        [tmp,iselected]=intersect(selected,tmp);
+        [~,iselected]=intersect(selected,tmp);
         selected=selected(sort(iselected));
         %remove those that are both from the unselected
         tmp=setdiff(unique(unselected),both);
-        [tmp,iunselected]=intersect(unselected,tmp);
+        [~,iunselected]=intersect(unselected,tmp);
         unselected=unselected(sort(iunselected));
         % make row vectors
         selected=selected(:)';
@@ -2764,53 +2872,57 @@ set(fh,'Visible','on');
         pos=1;
         %first put the selected gates by the order of their selection
         for item=selected
-            h=uicontrol(GateList,...
+            h=uicontrol(mArgsIn.Handles.GateList,...
                 'Style','checkbox',...
-                'String',[tubeGates{item}],...
-                'Tag',tubeGates{item},...
+                'String',[allGates{item}],...
+                'Tag',allGates{item},...
                 'Position',[5 guisizey-5-20*pos 110 20],...
                 'Value',1,...
-                'Callback',{@GateListCallback,fh});
+                'Callback',@GateListCallback,...
+                'UIContextMenu', mArgsIn.Handles.GatesCM);
             if length(mArgsIn.curGraph)==1
-                set(h,'String',[tubeGates{item} ' (' num2str(round(100*mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat.gatepercent(pos))) '%)'])
+                set(h,'String',[allGates{item} ' (' num2str(round(100*mArgsIn.GraphDB(mArgsIn.curGraph(1)).Stat.gatepercent(pos))) '%)'])
             end
             pos=pos+1;
         end
         %then put the non determined
         for item=both
-            uicontrol(GateList,...
+            uicontrol(mArgsIn.Handles.GateList,...
                 'Style','checkbox',...
-                'String',tubeGates{item},...
-                'Tag',tubeGates{item},...
+                'String',allGates{item},...
+                'Tag',allGates{item},...
                 'Position',[5 guisizey-5-20*pos 110 20],...
                 'Value',1,...
                 'ForegroundColor',[1 0 0],...
                 'FontAngle','italic',...
-                'Callback',{@GateListCallback,fh});
+                'Callback',@GateListCallback,...
+                'UIContextMenu', mArgsIn.Handles.GatesCM);
             pos=pos+1;
         end
         %then put the unselected gates by the order of their unselection
         for item=unselected
-            uicontrol(GateList,...
+            uicontrol(mArgsIn.Handles.GateList,...
                 'Style','checkbox',...
-                'String',tubeGates{item},...
-                'Tag',tubeGates{item},...
+                'String',allGates{item},...
+                'Tag',allGates{item},...
                 'Position',[5 guisizey-5-20*pos 110 20],...
                 'Value',0,...
-                'Callback',{@GateListCallback,fh});
+                'Callback',@GateListCallback,...
+                'UIContextMenu', mArgsIn.Handles.GatesCM);
             pos=pos+1;
         end
         %then put the rest
-        for item=1:length(tubeGates)
+        for item=1:length(allGates)
             if find([selected both unselected]==item)
             else
-                uicontrol(GateList,...
+                uicontrol(mArgsIn.Handles.GateList,...
                     'Style','checkbox',...
-                    'String',tubeGates{item},...
-                    'Tag',tubeGates{item},...
+                    'String',allGates{item},...
+                    'Tag',allGates{item},...
                     'Position',[5 guisizey-5-20*pos 110 20],...
                     'Value',0,...
-                    'Callback',{@GateListCallback,fh});
+                    'Callback',@GateListCallback,...
+                    'UIContextMenu', mArgsIn.Handles.GatesCM);
                 pos=pos+1;
             end
         end
@@ -2820,7 +2932,6 @@ set(fh,'Visible','on');
             %Update to version 0.2.5
             mArgsIn.version=2.5;
             %if color is an integer, change it to a string.
-            mHandles=mArgsIn.Handles;
             if isnumeric([mArgsIn.GraphDB.Color])
                 DT={mArgsIn.GraphDB.Data};
                 CLR={mArgsIn.GraphDB.Color};
@@ -2935,9 +3046,9 @@ set(fh,'Visible','on');
             if isfield(mArgsIn.TubeDB, 'Tubename')
                 for ctubename=[mArgsIn.TubeDB.Tubename];
                     ctubeidx=find(strcmp([mArgsIn.TubeDB.Tubename],ctubename),1,'first');
-                    if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,genvarname(char(ctubename)))
-                        for gatename=fieldnames(mArgsIn.GatesDB.(genvarname(char(ctubename))))'
-                            gate=mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename));
+                    if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,matlab.lang.makeValidName(char(ctubename)))
+                        for gatename=fieldnames(mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))))'
+                            gate=mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename));
                             if length(gate)==2
                                 gate{3}=gate{2};
                                 gate{4}=[];
@@ -2953,7 +3064,7 @@ set(fh,'Visible','on');
                                 gate{2}=...
                                     gate2d(gate{1},mArgsIn.TubeDB(ctubeidx).compdata,colorind(1),colorind(2));
                             end
-                            mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename))=gate;
+                            mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename))=gate;
                         end
                     end
                 end
@@ -2979,13 +3090,46 @@ set(fh,'Visible','on');
                 end
             end
 
-            mArgsIn.DBFile.geom.Graphsize=100;
-            mArgsIn.DBFile.geom.Gatesize=120;
+            mArgsIn.DBInfo.geom.Graphsize=100;
+            mArgsIn.DBInfo.geom.Gatesize=120;
+        end
+        if mArgsIn.version<3.19
+            %
+            % Change the field DBFile to DBInfo
+            %
+            mArgsIn.DBInfo=mArgsIn.DBFile;
+            mArgsIn=rmfield(mArgsIn,'DBFile');
+            %
+            % New gates strucutre. global gates for all tubes.
+            %
+            %collect all gates from all tubes into a single structure which
+            %will be the new GatesDB
+            allgates=struct();
+            for tube=fieldnames(mArgsIn.GatesDB)'
+                for cur_gate=fieldnames(mArgsIn.GatesDB.(tube{1}))'
+                    tmpgate=mArgsIn.GatesDB.(tube{1}).(cur_gate{1})([1,3:end]);
+                    if ~any(structfun(@(x) isequal(x,tmpgate), allgates))
+                        gatename=matlab.lang.makeUniqueStrings(cur_gate{1}, fieldnames(allgates));
+                        allgates.(gatename)=tmpgate;
+                    end
+                end
+            end
+            %put the logical gate in TubeDB.isgated
+            %or maybe calculate from scratch?
+            for tube=fieldnames(mArgsIn.GatesDB)'
+                % previously (delete): tube_ind=strcmp(tube,[mArgsIn.TubeDB.Tubename]);
+                tube_ind=strcmp(tube,matlab.lang.makeValidName([mArgsIn.TubeDB.Tubename], 'ReplacementStyle','hex'));
+                for cur_gate=fieldnames(mArgsIn.GatesDB.(tube{1}))'
+                    tmpisgated=mArgsIn.GatesDB.(tube{1}).(cur_gate{1})(2);
+                    mArgsIn.TubeDB(tube_ind).gatemask.(cur_gate{1})=tmpisgated;
+                end
+            end
+            mArgsIn.GatesDBnew=allgates;
         end
         %insert before this line the text in FileLoadCallback after the comment:
         
         mArgsIn.version=curversion;
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         %updates for next version are in FileLoadCallback
     end
     function mArgsIn=CalculateMarkers(mArgsIn)
@@ -3016,14 +3160,56 @@ set(fh,'Visible','on');
             Args.fCalcStat(mArgsIn);
         end
     end
+    function gatemask=calculate_gate_mask(Sample, gate)
+        %probably need to make sure it is not a logical or an artifact gate
+        %before starting
+        switch gate{3}
+            case 'logical'
+                switch gate{1}
+                    case 'Not'
+                        cgate=gate{2};
+                        gatemask= not( Sample.gatemask.( char( cgate) ) );
+                    case 'Xor'
+                        cgate1=gate{2}(1);
+                        cgate2=gate{2}(2);
+                        gatemask=xor(...
+                            Sample.gatemask.( char( cgate1) ),...
+                            Sample.gatemask.( char( cgate2) ));
+                    case 'And'
+                        gatemask=true( size( Sample.compdata ,1),1);
+                        for cgate=gate{2}'
+                            gatemask=and(gatemask,...
+                                Sample.gatemask.( char( cgate) ));
+                        end
+                    case 'Or'
+                        gatemask=false( size( Sample.compdata ,1),1);
+                        for cgate=gate{2}'
+                            gatemask=or(gatemask,...
+                                Sample.gatemask.( char( cgate) ));
+                        end
+                end
+            case 'artifact'
+                colorind=find(strcmp(Sample.parname,gate{2}),1,'first');
+                scaleddata=fcsscaleconvert(Sample.compdata(:,colorind),'lin',1, gate{1}{:});
+                gatemask=fcsartifact(scaleddata);
+            otherwise %regular 1 or 2 dimensional gate. TBD - redefine the 3rd element to be explicit.
+                colorind1=find(strcmp(Sample.parname,gate{2}),1,'first');
+                colorind2=find(strcmp(Sample.parname,gate{3}),1,'first');
+                if isempty(colorind2)
+                    gatemask=gate1d(gate{1}, Sample.compdata, colorind1);
+                else
+                    gatemask=gate2d(gate{1}, Sample.compdata, colorind1, colorind2);
+                end
+        end
+    end
     function mArgsIn=RecalcGateLogicalMask(mArgsIn,tubename_list)
         %calculate the second element of the gate (the logical mask) from
         %the other elements. first calculate the regular gates and than the
         %logical-derived gates
         %
-        %tubename_list is the tubename after genvarname
+        %tubename_list is the tubename after matlab.lang.makeValidName
         for ctubename=tubename_list;
-            ctubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),ctubename),1,'first');
+            ctubeidx=find(strcmp(matlab.lang.makeValidName([mArgsIn.TubeDB.Tubename]),ctubename),1,'first');
             if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,(char(ctubename)))
                 for gatename=fieldnames(mArgsIn.GatesDB.((char(ctubename))))'
                     gate=mArgsIn.GatesDB.((char(ctubename))).(char(gatename));
@@ -3048,78 +3234,75 @@ set(fh,'Visible','on');
                     end
                 end
                 for gatename=fieldnames(mArgsIn.GatesDB.((char(ctubename))))'
-                    gate=mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename));
+                    gate=mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename));
                     if ischar(gate{4}) && strcmp(gate{4},'logical')
                         %this is a logical-derived gate. do it now.
                         switch gate{1}
                             case 'Not'
                                 cgate=gate{3};
-                                mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename)){2}=not(mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(cgate)){2});
+                                mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename)){2}=not(mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(cgate)){2});
                             case 'Xor'
                                 cgate1=gate{3}(1);
                                 cgate2=gate{3}(2);
-                                mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename)){2}=xor(mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(cgate1)){2},mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(cgate2)){2});
+                                mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename)){2}=xor(mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(cgate1)){2},mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(cgate2)){2});
                             case 'And'
-                                gate_ind=true(size(mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gate{3}(1))){2}));
+                                gate_ind=true(size(mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gate{3}(1))){2}));
                                 for cgate=gate{3}
-                                    gate_ind=and(gate_ind,mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(cgate)){2});
+                                    gate_ind=and(gate_ind,mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(cgate)){2});
                                 end
-                                mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename)){2}=gate_ind;
+                                mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename)){2}=gate_ind;
                             case 'Or'
-                                gate_ind=false(size(mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gate{3}(1))){2}));
+                                gate_ind=false(size(mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gate{3}(1))){2}));
                                 for cgate=gate{3}
-                                    gate_ind=or(gate_ind,mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(cgate)){2});
+                                    gate_ind=or(gate_ind,mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(cgate)){2});
                                 end
-                                mArgsIn.GatesDB.(genvarname(char(ctubename))).(char(gatename)){2}=gate_ind;
+                                mArgsIn.GatesDB.(matlab.lang.makeValidName(char(ctubename))).(char(gatename)){2}=gate_ind;
                         end
                     end
                 end
             end
         end
     end
-    function mArgsIn=CalculateGatedData(mArgsIn)
-        for graph=mArgsIn.curGraph
+    function efdbIn=CalculateGatedData(efdbIn)
+        % Integrate all gates that should be applied to each plot
+        % generates mArgsIn.GraphDB(graph).gatedindex and calculate some
+        % stats.
+        
+        for graph=efdbIn.curGraph
             %check that the tube exists
             try
-                tubename=genvarname(mArgsIn.GraphDB(graph).Data);
+                tubename=matlab.lang.makeValidName(efdbIn.GraphDB(graph).Data);
             catch err
                 keyboard
                 rethrow(err)
             end
-            tubeidx=find(strcmp([mArgsIn.TubeDB.Tubename],mArgsIn.GraphDB(graph).Data),1,'first');
+            tubeidx=find(strcmp([efdbIn.TubeDB.Tubename],efdbIn.GraphDB(graph).Data),1,'first');
             if tubeidx
-                percent=[];
-                mArgsIn.GraphDB(graph).gatedindex=true(size(mArgsIn.TubeDB(tubeidx).compdata,1),1);
-                for gatename=mArgsIn.GraphDB(graph).Gates
+                percent=zeros(length(efdbIn.GraphDB(graph).Gates),1);
+                efdbIn.GraphDB(graph).gatedindex=true(size(efdbIn.TubeDB(tubeidx).compdata,1),1);
+                for cur_gate_idx=1:length(efdbIn.GraphDB(graph).Gates)
+                    gatename=efdbIn.GraphDB(graph).Gates(cur_gate_idx);
                     %find the gate
-                    if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,tubename) && isfield(mArgsIn.GatesDB.(tubename),gatename)
-                        gate=mArgsIn.GatesDB.(tubename).(char(gatename));
+                    if isfield(efdbIn,'GatesDBnew') && isfield(efdbIn.GatesDBnew,gatename)
+                        gate=efdbIn.GatesDBnew.(char(gatename));
                     else
+                        %this gate is not defined mark it with a -1 percent
+                        percent(cur_gate_idx)=-1;
                         continue
                     end
-                    num_events=sum(mArgsIn.GraphDB(graph).gatedindex);
-                    if isempty(gate{2})
-                        mArgsIn.GraphDB(graph).gatedindex=false(size(mArgsIn.GraphDB(graph).gatedindex));
-                    else
-                        mArgsIn.GraphDB(graph).gatedindex=mArgsIn.GraphDB(graph).gatedindex & gate{2};
+                    if ~isfield(efdbIn.TubeDB,'gatemask') || ~isfield(efdbIn.TubeDB(tubeidx).gatemask,gatename)
+                        %need to calculate the gatemask
+                        efdbIn.TubeDB(tubeidx).gatemask.(char(gatename))=calculate_gate_mask(efdbIn.TubeDB(tubeidx),gate);
                     end
-                    percent(end+1)=sum(mArgsIn.GraphDB(graph).gatedindex)/num_events;
+                    num_events_parent=sum(efdbIn.GraphDB(graph).gatedindex);
+                    cur_gatemask=efdbIn.TubeDB(tubeidx).gatemask.(char(gatename));
+                    efdbIn.GraphDB(graph).gatedindex=efdbIn.GraphDB(graph).gatedindex & cur_gatemask;
+                    percent(cur_gate_idx)=sum(efdbIn.GraphDB(graph).gatedindex)/num_events_parent;
                 end
-                mArgsIn.GraphDB(graph).Stat.gatepercent=percent;
-                if ~strcmp(mArgsIn.GraphDB(graph).Ctrl,'None')
-                    %apply only lymhpogate on Ctrl
-                    ctrlname=genvarname(mArgsIn.GraphDB(graph).Ctrl);
-                    ctrlidx=find(strcmp([mArgsIn.TubeDB.Tubename],mArgsIn.GraphDB(graph).Ctrl),1,'first');
-                    if isempty(strcmp(mArgsIn.GraphDB(graph).Gates,'lymphogate')) && isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,ctrlname) && isfield(mArgsIn.GatesDB.(ctrlname),'lymphogate')
-                        gate=mArgsIn.GatesDB.(ctrlname).lymphogate;
-                        mArgsIn.GraphDB(graph).gatedindexctrl=gate{2};
-                    else
-                        mArgsIn.GraphDB(graph).gatedindexctrl=true(size(mArgsIn.TubeDB(ctrlidx).compdata,1),1);
-                    end
-                end
+                efdbIn.GraphDB(graph).Stat.gatepercent=percent;
             else %tube does not exist
-                mArgsIn.GraphDB(graph).Stat.gatepercent=0;
-                mArgsIn.GraphDB(graph).gatedindex=[];
+                efdbIn.GraphDB(graph).Stat.gatepercent=0;
+                efdbIn.GraphDB(graph).gatedindex=[];
             end
         end
     end
@@ -3147,7 +3330,8 @@ set(fh,'Visible','on');
         end
         
         if any(strcmp(fcsfile.var_name,'SPILL'))
-            spill=strread(fcsfile.var_value{strcmp(fcsfile.var_name,'SPILL')},'%s','delimiter', ',');
+            spill=textscan(fcsfile.var_value{strcmp(fcsfile.var_name,'SPILL')},'%s','delimiter', ',');
+            spill=spill{1};
             mtxsize=str2double(spill{1});
             % The compenstaion parameters names
             Tube.CompensationPrm=spill(2:mtxsize+1);
@@ -3175,50 +3359,79 @@ set(fh,'Visible','on');
                 Tube.CompensationIndex(end+1)=find(strcmp(char(i),Tube.parname));
             end
             Tube.compdata=fcsfile.fcsdata;
-            Tube.compdata(:,Tube.CompensationIndex)=Tube.compdata(:,Tube.CompensationIndex)*inv(Tube.CompensationMtx');
+            Tube.compdata(:,Tube.CompensationIndex)=Tube.compdata(:,Tube.CompensationIndex)/(Tube.CompensationMtx');
         else
             Tube.compdata=fcsfile.fcsdata;
         end
     end
-    function mArgsIn=abs2relpath(mArgsIn)
-        %change all paths to relative.
-        %TubeDB().tubepath
+
+    function efdb=abs2relpath(efdb)
+        %change all tube paths to relative.
+        %mostly effects efdb.TubeDB().tubepath
         
-        if java.io.File(mArgsIn.DBFile.RootFolder).isAbsolute
-            rootdir=char(java.io.File(mArgsIn.DBFile.RootFolder).getCanonicalPath);
+        if java.io.File(efdb.DBInfo.RootFolder).isAbsolute
+            rootdir=char(java.io.File(efdb.DBInfo.RootFolder).getCanonicalPath);
         else
-            [dbfiledir ,~]=fileparts(mArgsIn.DBFile.Name);
-            rootdir=char(java.io.File([dbfiledir, filesep, mArgsIn.DBFile.RootFolder]).getCanonicalPath);
+            [DBInfodir ,~]=fileparts(efdb.DBInfo.Name);
+            rootdir=char(java.io.File([DBInfodir, filesep, efdb.DBInfo.RootFolder]).getCanonicalPath);
         end
         
-        for i=1:length(mArgsIn.TubeDB)
-            if strfind(mArgsIn.TubeDB(i).tubepath,rootdir)
-                mArgsIn.TubeDB(i).tubepath = ...
-                    mArgsIn.TubeDB(i).tubepath(length(rootdir)+1:end);
+        for i=1:length(efdb.TubeDB)
+            if strfind(efdb.TubeDB(i).tubepath,rootdir)
+                efdb.TubeDB(i).tubepath = ...
+                    efdb.TubeDB(i).tubepath(length(rootdir)+1:end);
             end
         end
     end
-    function mArgsIn=rel2abspath(mArgsIn)
-        %change all paths to absolute.
-        %m.TubeDB().tubepath
+    function efdb=rel2abspath(efdb)
+        %change all tube paths to absolute.
+        %mostly effect efdb.TubeDB().tubepath
         
-        if java.io.File(mArgsIn.DBFile.RootFolder).isAbsolute
-            rootdir=char(java.io.File(mArgsIn.DBFile.RootFolder).getCanonicalPath);
+        if java.io.File(efdb.DBInfo.RootFolder).isAbsolute
+            rootdir=char(java.io.File(efdb.DBInfo.RootFolder).getCanonicalPath);
         else
-            [dbfiledir ,~]=fileparts(mArgsIn.DBFile.Name);
-            rootdir=char(java.io.File([dbfiledir, filesep, mArgsIn.DBFile.RootFolder]).getCanonicalPath);
+            [DBInfodir ,~]=fileparts(efdb.DBInfo.Name);
+            rootdir=char(java.io.File([DBInfodir, filesep, efdb.DBInfo.RootFolder]).getCanonicalPath);
         end
 
-        for i=1:length(mArgsIn.TubeDB)
-            mArgsIn.TubeDB(i).tubepath = ...
-                char(java.io.File([rootdir filesep mArgsIn.TubeDB(i).tubepath]).getCanonicalPath);
+        for i=1:length(efdb.TubeDB)
+            efdb.TubeDB(i).tubepath = ...
+                char(java.io.File([rootdir filesep efdb.TubeDB(i).tubepath]).getCanonicalPath);
         end
     end
 
+    function efdb=disable_gui(efdb)
+        efdb.DBInfo.enabled_gui=findobj(efdb.Handles.fh,'Enable','on');
+        set(efdb.DBInfo.enabled_gui,'Enable','off');
+    end
+    function efdb=enable_gui(efdb)
+        ind_handle=ishandle(efdb.DBInfo.enabled_gui);
+        set(efdb.DBInfo.enabled_gui(ind_handle),'Enable','on');
+    end
+    function efdb=efdb_load(hObject)
+        fhIn=ancestor(hObject,'figure');
+        efdb=guidata(fhIn);
+    end
+    function efdb_save(efdb)
+        % save the variable efdb into the guidata of the figure stored in
+        % efdb
+        
+        %find the figure object
+        fhIn=efdb.Handles.fh;
 
+        % If the save-able parts of the efdb were changed, mark it.
+        if ~isempty(guidata(fhIn))
+            if ~isequal(rmfield(efdb,'Handles'),rmfield(guidata(fhIn),'Handles'))
+                efdb.DBInfo.isChanged=1;
+            end
+        end
+        
+        % Save the guidata
+        guidata(fhIn,efdb)
+    end
 end
 
-function varargout = EasyFlow_compensation(varargin)
+function EasyFlow_compensation(varargin)
 % EasyFlow_FIGPROP Figure properties for the EasyFlow
 %
 
@@ -3371,15 +3584,15 @@ set(fh,'Visible','on');
             
             %recalculate the gate logical indices
             
-            mArgsIn=mArgsIn.Handles.RecalcGateLogicalMask(mArgsIn,genvarname(ctubename));
+            mArgsIn=mArgsIn.Handles.RecalcGateLogicalMask(mArgsIn,matlab.lang.makeValidName(ctubename));
             
         end
         
         %needto recalc gated data to show
         mArgsIn=mArgsIn.Handles.CalculateGatedData(mArgsIn);
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         %figure(gcbf);
     end
 
@@ -3395,7 +3608,7 @@ set(fh,'Visible','on');
     function MenuTableCopy(hObject,eventdata)
         mArgsIn=guidata(hMainFig);
         mArgsIn.copy.compensation=mtxvalue;
-        mArgsIn.DBFile.isChanged=1;
+        mArgsIn.DBInfo.isChanged=1;
         guidata(hMainFig,mArgsIn)
     end
     function MenuTablePaste(hObject,eventdata)
@@ -3464,7 +3677,7 @@ set(fh,'Visible','on');
                 
                 %recalculate the gate logical indices
                 ctubename=mArgsIn.TubeDB(ctubeidx).Tubename;
-                mArgsIn=mArgsIn.Handles.RecalcGateLogicalMask(mArgsIn,genvarname(ctubename));
+                mArgsIn=mArgsIn.Handles.RecalcGateLogicalMask(mArgsIn,matlab.lang.makeValidName(ctubename));
             end
             %need to recalc gates but not for the curGraph
             changed_graphs=find(cellfun(@(x) any(strcmp(S(Selection),x)),{mArgsIn.GraphDB.Data}));
@@ -3472,9 +3685,9 @@ set(fh,'Visible','on');
             mArgsIn.curGraph=changed_graphs;
             mArgsIn=mArgsIn.Handles.CalculateGatedData(mArgsIn);
             mArgsIn.curGraph=cgraphs;
-            mArgsIn.DBFile.isChanged=1;
+            mArgsIn.DBInfo.isChanged=1;
             guidata(hMainFig,mArgsIn);
-            mArgsIn.Handles.DrawFcn(hMainFig);
+            mArgsIn.Handles.DrawFcn(mArgsIn);
         end
     end
     function MenuTableAutoComp(hObject,eventdata)
@@ -3518,7 +3731,7 @@ set(fh,'Visible','on');
         
     end
 end
-function varargout = EasyFlow_figprop(varargin)
+function EasyFlow_figprop(varargin)
 % EasyFlow_FIGPROP Figure properties for the EasyFlow
 %
 
@@ -3767,7 +3980,7 @@ set(fh,'Visible','on');
             set(Yprm,'Visible','on');
         end
         if ~strcmp(eventdata,'dontplot')
-            mArgsIn.Handles.DrawFcn(hMainFig);
+            mArgsIn.Handles.DrawFcn(mArgsIn);
             figure(gcbf);
         end
     end
@@ -3780,7 +3993,7 @@ set(fh,'Visible','on');
         end
         mArgsIn.Display.graph_Xaxis_Radio=find(get(hObject,'Children')==get(hObject,'SelectedObject'));
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function YaxisSelCh(hObject,eventdata,hMainFig)
@@ -3792,7 +4005,7 @@ set(fh,'Visible','on');
         end
         mArgsIn.Display.graph_Yaxis_Radio=find(get(hObject,'Children')==get(hObject,'SelectedObject'));
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
 
@@ -3806,7 +4019,7 @@ set(fh,'Visible','on');
             end
         end
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function XAutoCallback(hObject,eventdata)
@@ -3827,7 +4040,7 @@ set(fh,'Visible','on');
             mArgsIn.Display.XAuto=0;
         end
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function YprmhistCallback(hObject,eventdata)
@@ -3835,7 +4048,7 @@ set(fh,'Visible','on');
         mArgsIn.Display.Changed=1;
         mArgsIn.Display.histnormalize=get(get(hObject,'SelectedObject'),'Tag');
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function YparamCallback(hObject,eventdata,hMainFig)
@@ -3848,7 +4061,7 @@ set(fh,'Visible','on');
             end
         end
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function YAutoCallback(hObject,eventdata)
@@ -3870,7 +4083,7 @@ set(fh,'Visible','on');
             mArgsIn.Display.YAuto=0;
         end
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
         figure(gcbf);
     end
     function SmoothCallback(hObject,eventdata)
@@ -3878,7 +4091,7 @@ set(fh,'Visible','on');
         mArgsIn.Display.smoothprm=str2double(get(hObject,'string'));
         mArgsIn.Display.Changed=1;
         guidata(hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(hMainFig);
+        mArgsIn.Handles.DrawFcn(mArgsIn);
     end
 %  Utility functions for MYGUI
     function SetEnabledBtns(hMainFig,fh)
@@ -3962,386 +4175,7 @@ set(fh,'Visible','on');
     end
 
 end
-function varargout = EasyFlow_gateedit(varargin)
-% EasyFlow_GateEdit Gate Editor for the EasyFlow
-%
-
-%  Initialization tasks
-
-%  Initialize input/output parameters
-hMainFig=varargin{1};
-mArgsIn=guidata(hMainFig);
-%if there is already an instance running just make it visible and raise it.
-if isfield(mArgsIn.Handles,'gateedit')
-    set(mArgsIn.Handles.gateedit,'Visible','on');
-    figure(mArgsIn.Handles.gateedit);
-    return;
-end
-
-
-% Initialize data structures
-
-%  Construct the figure
-scrsz=get(0,'ScreenSize');
-guisize=500;
-fh=figure('Position',[(scrsz(3)-guisize)/2,(scrsz(4)-guisize)/2,guisize,guisize],...
-    'MenuBar','none',...
-    'Name','FACS GUI Gate Editor',...
-    'NumberTitle','off',...
-    'Visible','off',...
-    'Resize','off',...
-    'CloseRequestFcn',{@fhClose,hMainFig});
-mArgsIn.Handles.gateedit=fh;
-guidata(hMainFig,mArgsIn);
-%  Construct the components
-Args.Handles.TubeList=uicontrol(fh,...
-    'Style','listbox',...
-    'HorizontalAlignment','left',...
-    'Position',[0 0 200 guisize],...
-    'Max',2,...
-    'Value',[],...
-    'String',mArgsIn.TubeNames(2:end),...
-    'Callback',{@TubeListCallback,fh});
-Args.Handles.GateList=uicontrol(fh,...
-    'Style','listbox',...
-    'HorizontalAlignment','left',...
-    'Position',[200 0 100 guisize],...
-    'Value',1,...
-    'String',{},...
-    'Callback',{@GateListCallback,fh});
-Args.Handles.GateParam=uipanel(fh,...
-    'Units','pixels',...
-    'Position',[300,0,guisize-300,guisize],...
-    'Visible','on');
-%Context menu for the gatelist
-GatesCM = uicontextmenu('Parent',fh,...
-    'Callback',{@MenuGates,fh});
-uimenu(GatesCM,...
-    'Label','Add Gate',...
-    'Callback',{@MenuGatesAdd,fh});
-uimenu(GatesCM,...
-    'Label','Delete Gate',...
-    'Callback',{@MenuGatesDelete,fh});
-uimenu(GatesCM,...
-    'Label','Duplicate To All',...
-    'Callback',{@MenuGatesDuplicate,fh});
-set(Args.Handles.GateList,'UIContextMenu',GatesCM);
-
-%  Initialization tasks
-% Args.fCalcStat=@() CalcStat(fh,hMainFig);
-Args.hMainFig=hMainFig;
-guidata(fh,Args);
-% CalcStat(fh,hMainFig);
-%
-
-%  Render GUI visible
-set(fh,'Visible','on');
-
-%  Callbacks.
-    function fhClose(hObject,eventdata,hMainFig)
-        mArgsIn=guidata(hMainFig);
-        mArgsIn.Handles=rmfield(mArgsIn.Handles,'gateedit');
-        guidata(hMainFig,mArgsIn);
-        if isempty(gcbf)
-            if length(dbstack) == 1
-                warning('MATLAB:closereq', ...
-                    'Calling closereq from the command line is now obsolete, use close instead');
-            end
-            close force
-        else
-            delete(gcbf);
-        end
-    end
-    function TubeListCallback(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gateliststring={};
-        for Tube=get(Args.Handles.TubeList,'Value')+1;
-            if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,genvarname(mArgsIn.TubeNames(Tube)))
-                gateliststring=unique([gateliststring;fieldnames(mArgsIn.GatesDB.(genvarname(char(mArgsIn.TubeNames(Tube)))))]);
-            end
-        end
-        set(Args.Handles.GateList,'String',gateliststring);
-        set(Args.Handles.GateList,'Value',1);
-        delete(get(Args.Handles.GateParam,'Children'));
-        guidata(Args.hMainFig,mArgsIn);
-        guidata(fh,Args);
-    end
-    function GateListCallback(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gatelist=get(Args.Handles.GateList,'String');
-        gatelist=gatelist(get(Args.Handles.GateList,'Value'));
-        tubelist=get(Args.Handles.TubeList,'String');
-        tubelist=genvarname(tubelist(get(Args.Handles.TubeList,'Value')));
-        delete(get(Args.Handles.GateParam,'Children'));
-        if length(tubelist)==1 && length(gatelist)==1
-            gatedata=mArgsIn.GatesDB.(char(tubelist)).(char(gatelist));
-            if isempty(gatedata{4})
-                OneDGatePrm(fh,gatedata);
-            end
-        end
-    end
-    function MenuGates(hObject,eventdata,fh)
-        Args=guidata(fh);
-        submenu=get(hObject,'Children');
-        
-        if isempty(get(Args.Handles.TubeList,'Value')) %choose nothing in the tube list
-            set(submenu(strcmp(get(submenu,'Label'),'Add Gate')),'Enable','off');
-            set(submenu(strcmp(get(submenu,'Label'),'Delete Gate')),'Enable','off');
-            set(submenu(strcmp(get(submenu,'Label'),'Duplicate To All')),'Enable','off');
-        elseif length(get(Args.Handles.TubeList,'Value'))==1 %choose only one tube
-            set(submenu(strcmp(get(submenu,'Label'),'Add Gate')),'Enable','on');
-            set(submenu(strcmp(get(submenu,'Label'),'Duplicate To All')),'Enable','off');
-            set(submenu(strcmp(get(submenu,'Label'),'Delete Gate')),'Enable','on');
-            if isempty(get(Args.Handles.GateList,'String'))
-                set(submenu(strcmp(get(submenu,'Label'),'Delete Gate')),'Enable','off');
-            end
-        else %choose several tubes
-            set(submenu(strcmp(get(submenu,'Label'),'Add Gate')),'Enable','on');
-            set(submenu(strcmp(get(submenu,'Label'),'Duplicate To All')),'Enable','on');
-            set(submenu(strcmp(get(submenu,'Label'),'Delete Gate')),'Enable','on');
-            if isempty(get(Args.Handles.GateList,'String'))
-                set(submenu(strcmp(get(submenu,'Label'),'Duplicate To All')),'Enable','off');
-                set(submenu(strcmp(get(submenu,'Label'),'Delete Gate')),'Enable','off');
-            end
-        end
-        
-        guidata(fh,Args)
-    end
-    function MenuGatesDelete(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gatelist=get(Args.Handles.GateList,'String');
-        gatelist=gatelist(get(Args.Handles.GateList,'Value'));% only one
-        tubelist=get(Args.Handles.TubeList,'String');
-        tubelist=tubelist(get(Args.Handles.TubeList,'Value'));
-        for tube=tubelist'
-            gate=gatelist';
-            %find logical gates that depend on the gate
-            logicalgates=find(strcmp(structfun(@(x) x([4]),mArgsIn.GatesDB.(genvarname(char(tube)))),'logical'));
-            if ~isempty(logicalgates)
-                %find the third element of the logical gates
-                structfun(@(x) x([3]),mArgsIn.GatesDB.(genvarname(char(tube))));
-                ans(logicalgates);
-                %check if any of the logical gates depend on the gate to be removed
-                dependant_gates_idx=logicalgates(cellfun(@(x) any(strcmp(x,gate)),ans));
-                fieldnames(mArgsIn.GatesDB.(genvarname(char(tube))));
-                dependant_gates=ans(dependant_gates_idx);
-                %if it is not empty, don't delete the gate
-                if ~isempty(dependant_gates)
-                    tubetxt=[dependant_gates , cellstr(char(ones(size(dependant_gates))*''', '''))]';
-                    tubetxt=[tubetxt{:}];
-                    msgbox({'Aborting...'...
-                        ['In the Tube ''' char(tube) ''' there are gates that depend on ''' char(gate) '''.']...
-                        ['Please remove first the following gates - '''  tubetxt(1:end-3) '.']}...
-                        ,'EasyFlow','error','modal');
-                    uiwait;
-                    return;
-                end
-            end
-            %remove the gate from the gate list
-            if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,genvarname(tube)) && isfield(mArgsIn.GatesDB.(genvarname(char(tube))),gate)
-                mArgsIn.GatesDB.(genvarname(char(tube)))=rmfield(mArgsIn.GatesDB.(genvarname(char(tube))),gate);
-            end
-            %find graphs with this tube and remove the gate
-            graph_location=strcmp({mArgsIn.GraphDB.Data},tube);
-            for cgraph=find(graph_location)
-                ongates=strcmp(mArgsIn.GraphDB(cgraph).Gates,gate);
-                mArgsIn.GraphDB(cgraph).Gates(ongates)=[];
-                offgates=strcmp(mArgsIn.GraphDB(cgraph).GatesOff,gate);
-                mArgsIn.GraphDB(cgraph).GatesOff(offgates)=[];
-            end
-        end
-        guidata(Args.hMainFig,mArgsIn);
-        TubeListCallback(hObject,eventdata,fh);
-        mArgsIn.Handles.UpdateGateListFcn(mArgsIn);
-        mArgsIn=mArgsIn.Handles.CalculateGatedData(mArgsIn);
-        guidata(Args.hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(Args.hMainFig);
-    end
-    function MenuGatesDuplicate(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gatelist=get(Args.Handles.GateList,'String');
-        gatelist=gatelist(get(Args.Handles.GateList,'Value'));
-        tubelist=get(Args.Handles.TubeList,'String');
-        tubelist=genvarname(tubelist(get(Args.Handles.TubeList,'Value')));
-        
-        for gate=gatelist'
-            gatedata=[];
-            %find the data for the gate
-            for tube=tubelist'
-                if isfield(mArgsIn,'GatesDB') && isfield(mArgsIn.GatesDB,tube) && isfield(mArgsIn.GatesDB.(char(tube)),gate)
-                    if isempty(gatedata)
-                        gatedata=mArgsIn.GatesDB.(char(tube)).(char(gate));
-                    elseif ~isequal(gatedata([1 3 4]),mArgsIn.GatesDB.(char(tube)).(char(gate))([1 3 4]))
-                        msgbox('There are two different gates with this name.','EasyFlow','error','modal');
-                        uiwait;
-                        return;
-                    end
-                end
-            end
-            %if it is a logical derived gate - check that its dependants
-            %are there
-            if strcmp(gatedata{4},'logical')
-                %find tubes that don't have all dependants
-                nodept_tubes=tubelist(cellfun(@(x) ~all(isfield(mArgsIn.GatesDB.(x),gatedata{3})),tubelist));
-                if ~isempty(nodept_tubes)
-                    depttxt=[gatedata{3}' , cellstr(char(ones(size(gatedata{3}))'*''', '''))]';
-                    depttxt=[depttxt{:}];
-                    msgbox({['Cannot copy ' char(gate) '.']...
-                        ['Make sure all tubes have the following gates before trying again:']...
-                        ['''' depttxt(1:end-3) '.']}...
-                        ,'EasyFlow','error','modal');
-                    uiwait;
-                    return;
-                end
-            end
-            %copy it to all other
-            for tube=tubelist'
-                mArgsIn.GatesDB.(char(tube)).(char(gate))=gatedata;
-            end
-            %recalculate the gate logical indices
-            mArgsIn=mArgsIn.Handles.RecalcGateLogicalMask(mArgsIn,tubelist');
-        end
-        guidata(Args.hMainFig,mArgsIn);
-        TubeListCallback(hObject,eventdata,fh);
-        mArgsIn.Handles.UpdateGateListFcn(mArgsIn);
-        mArgsIn=mArgsIn.Handles.CalculateGatedData(mArgsIn);
-        guidata(Args.hMainFig,mArgsIn);
-        mArgsIn.Handles.DrawFcn(Args.hMainFig);
-    end
-    function MenuGatesAdd(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gatelist=get(Args.Handles.GateList,'String');
-        tubelist=get(Args.Handles.TubeList,'String');
-        tubelist=genvarname(tubelist(get(Args.Handles.TubeList,'Value')));
-        gatename=char(inputdlg('Gate name:','Add Gate'));
-        % check that the name is non empty and doesn't exist already.
-        if isempty(gatename)
-            return;
-        end
-        if strcmp(gatename,gatelist)
-            msgbox('A gate with this name already exists.','EasyFlow','error','modal');
-            uiwait;
-            return;
-        end
-        
-        gatedata{1}=[-Inf,Inf];
-        gatedata{3}=1;
-        gatedata{4}=[];
-        
-        for tube=tubelist'
-            mArgsIn.GatesDB.(char(tube)).(gatename)=gatedata;
-            ctubeidx=find(strcmp(genvarname([mArgsIn.TubeDB.Tubename]),tube),1,'first');
-            colorind=find(strcmp(mArgsIn.TubeDB(ctubeidx).parname,gatedata{3}),1,'first');
-            mArgsIn.GatesDB.(char(tube)).(char(gate)){2}=...
-                mArgsIn.TubeDB(ctubeidx).compdata(:,colorind)>gatedata{1}(1) ...
-                & mArgsIn.TubeDB(ctubeidx).compdata(:,colorind)<gatedata{1}(2);
-        end
-        
-        guidata(Args.hMainFig,mArgsIn);
-        TubeListCallback(hObject,eventdata,fh);
-        mArgsIn.Handles.UpdateGateListFcn(mArgsIn);
-        
-    end
-    function OneDGateEdit(hObject,eventdata,fh)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        gatelist=get(Args.Handles.GateList,'String');
-        gatelist=gatelist(get(Args.Handles.GateList,'Value'));
-        tubelist=get(Args.Handles.TubeList,'String');
-        tubelist=genvarname(tubelist(get(Args.Handles.TubeList,'Value')));
-        gatedata=mArgsIn.GatesDB.(char(tubelist)).(char(gatelist));
-        %do the necessary transformation on the linear values of the gate 
-        switch mArgsIn.Display.graph_Xaxis
-            case 'log'
-                gate=log10(gatedata{1});
-            case 'logicle'
-                gate=asinh(mArgsIn.Display.graph_Xaxis_param(3)*gatedata{1}/2)/log(10);
-        end
-        gate(3)=gatedata{1}(3);
-        figure(Args.hMainFig)
-        ax=axis;
-        if gate(3)<ax(4)/10
-            gate(3)=ax(4)/2;
-        end
-        axiscm=get(gca,'UIContextMenu');
-        set(gca,'UIContextMenu',[]);
-        gate=gate1d(gate);
-        set(gca,'UIContextMenu',axiscm);
-        figure(fh);
-        %tbd more than one tube selected
-        %tbd 2d gates
-        %tbd save the new gate and update everything
-        %tbd allow direct change by the numbers
-    end
-
-%  Utility functions for MYGUI
-    function OneDGatePrm(fh,gate)
-        Args=guidata(fh);
-        mArgsIn=guidata(Args.hMainFig);
-        delete(get(Args.Handles.GateParam,'Children'))
-        guipos=get(Args.Handles.GateParam,'Position');
-        guisizex=guipos(3);
-        guisizey=guipos(4);
-        gatecolor=gate{3};
-        gatevalue=gate{1};
-        %generate the uicontrols
-        uicontrol(Args.Handles.GateParam,...
-            'Style','text',...
-            'Position',[0 3*guisizey/4 50 20],...
-            'String','Color:',...
-            'HorizontalAlignment','right');
-        uicontrol(Args.Handles.GateParam,...
-            'Style','text',...
-            'Position',[0 3*guisizey/4-40 50 20],...
-            'String','Min:',...
-            'HorizontalAlignment','right');
-        uicontrol(Args.Handles.GateParam,...
-            'Style','text',...
-            'Position',[0 3*guisizey/4-80 50 20],...
-            'String','Max:',...
-            'HorizontalAlignment','right');
-        uicontrol(Args.Handles.GateParam,...
-            'Style','edit',...
-            'Tag','color',...
-            'Enable','off',...
-            'Position',[60 3*guisizey/4 100 20],...
-            'String',num2str(gatecolor));
-        uicontrol(Args.Handles.GateParam,...
-            'Style','edit',...
-            'Tag','min',...
-            'Enable','off',...
-            'Position',[60 3*guisizey/4-40 100 20],...
-            'String',num2str(gatevalue(1)));
-        uicontrol(Args.Handles.GateParam,...
-            'Style','edit',...
-            'Tag','max',...
-            'Enable','off',...
-            'Position',[60 3*guisizey/4-80 100 20],...
-            'String',num2str(gatevalue(2)));
-        EditBtn=uicontrol(Args.Handles.GateParam,...
-            'Style','pushbutton',...
-            'Tag','Edit',...
-            'Position',[60 3*guisizey/4-120 100 20],...
-            'String','Edit Gate',...
-            'Enable','off',...
-            'Callback',{@OneDGateEdit,fh});
-        
-        %check if the current display can be used to edit the gate
-        %tbd need to reevaluate when change graphs
-        if strcmp(mArgsIn.Display.graph_type,'Histogram') &&...
-                strcmp(mArgsIn.GraphDB(mArgsIn.curGraph(1)).Color, gatecolor)
-            set(EditBtn,'Enable','on');
-        end
-        guidata(fh,Args);
-    end
-
-end
-function varargout = EasyFlow_statwin(varargin)
+function EasyFlow_statwin(varargin)
 % EasyFlow_FIGPROP Figure properties for the EasyFlow
 %
 
@@ -4840,9 +4674,9 @@ for index=1:length(filename)
     %parse text section
     if strcmp('\',fcstext(1))
         %TBR 20150605 parsedtext=textscan(fcstext(2:end),'%s','delimiter',['\' fcstext(1)],'Whitespace','','bufsize',length(fcstext));
-        parsedtext=textscan(fcstext(2:end),'%s','delimiter',['\' fcstext(1)],'Whitespace','');
+        parsedtext=textscan(fcstext(2:end),'%s','delimiter',['\' fcstext(1)],'Whitespace','','EndOfLine','');
     else
-        parsedtext=textscan(fcstext(2:end),'%s','delimiter',fcstext(1),'Whitespace','');
+        parsedtext=textscan(fcstext(2:end),'%s','delimiter',fcstext(1),'Whitespace','','EndOfLine','');
     end
     var_name=parsedtext{1}(1:2:end);
     var_value=parsedtext{1}(2:2:end);
@@ -5307,9 +5141,9 @@ ytickfun(ymin,ymax,yprm,'Y');
             tickslneg=[];
         end
 
-        ticks=[-ticksneg(end:-1:1) 0 tickspos(:)'];
+        ticks=[-reshape(ticksneg(end:-1:1), 1, []) 0 tickspos(:)'];
         set(gca,[dim 'Tick'],logicle(ticks,prm))
-        set(gca,[dim 'TickLabel'],[tickslneg(end:-1:1);{0};tickslpos(:)])
+        set(gca,[dim 'TickLabel'],[reshape(tickslneg(end:-1:1),[],1);{0};tickslpos(:)])
     end
 
 end
@@ -5853,9 +5687,18 @@ function gate=gate1d(gate,data,gatecol,outcol)
 %gate1d(gate,data)
 %   filters the data according to the gate returns logical places where the
 %   data passed the gate
+%gate1d(gate,data,gatecol)
+%   filters the data in column gatecol according to the gate returns 
+%   logical places where the data passed the gate
 %gate1d(gate, data, gatecol, outcol)
 %   return the data in column outcol whenever the data in gatecol passes
 %   the gate.
+
+WBDF = get(gcf,'WindowButtonDownFcn');
+WBUF = get(gcf,'WindowButtonUpFcn');
+WBMF = get(gcf,'WindowButtonMotionFcn');
+pntr = get(gcf,'Pointer');
+
 switch nargin
     case 0
         gate=gate1d_create;
@@ -5863,10 +5706,17 @@ switch nargin
         gate=gate1d_create(gate);
     case 2
         gate=gate1d_apply(gate,data);
+    case 3
+        gate=gate1d_apply(gate,data(:,gatecol));
     case 4
         gatelogical=gate1d_apply(gate,data(:,gatecol));
         gate=data(gatelogical,outcol);
 end
+
+set(gcf,'WindowButtonDownFcn', WBDF);
+set(gcf,'WindowButtonUpFcn', WBUF);
+set(gcf,'WindowButtonMotionFcn', WBMF);
+set(gcf,'Pointer', pntr);
 
     function gate=gate1d_create(gate)
         lh=line('Visible','off');
@@ -5992,6 +5842,12 @@ function gate=gate2d(gate,data,datay,gatecoly,outcol)
 %gate2d(gate, data, gatecolx, gatecoly, outcol)
 %   returns the data in column outcol whenever the data in gatecolx,
 %   gatecoly passes the gate.
+
+WBDF = get(gcf,'WindowButtonDownFcn');
+WBUF = get(gcf,'WindowButtonUpFcn');
+WBMF = get(gcf,'WindowButtonMotionFcn');
+pntr = get(gcf,'Pointer');       
+
 switch nargin
     case 0
         gate=gate2d_create;
@@ -6005,6 +5861,11 @@ switch nargin
         gatelogical=gate2d_apply(gate,data(:,datay),data(:,gatecoly));
         gate=data(gatelogical,outcol);
 end
+
+set(gcf,'WindowButtonDownFcn', WBDF);
+set(gcf,'WindowButtonUpFcn', WBUF);
+set(gcf,'WindowButtonMotionFcn', WBMF);
+set(gcf,'Pointer', pntr);
 
 
     function gate=gate2d_create(gate)
@@ -6024,7 +5885,7 @@ end
                 set(gcf,'WindowButtonMotionFcn',@selectchange)
         end
         uiwait;
-        
+        %functions for creating new gate
         function btndown(src,evnt)
             p=get(ah,'CurrentPoint');
             if strcmp(get(src,'SelectionType'),'normal')
@@ -6046,20 +5907,30 @@ end
             p=get(ah,'CurrentPoint');
             newp(1,1)=min(max(p(1,1),values(1)),values(2));
             newp(2,1)=min(max(p(1,2),values(3)),values(4));
-            %2010dec newgate=makehull([gate newp]);
             newgate=[gate newp];
             set(lh,'XData',newgate(1,:),'YData',newgate(2,:),'Marker','.','Color','r');
         end
+        %functions for editing gate
         function selectchange(src,evnt)
             p=get(ah,'CurrentPoint');
             xdist=(gate(1,:)-p(1,1))/nearx;
             ydist=(gate(2,:)-p(1,2))/neary;
             dist=xdist.^2+ydist.^2;
             if min(dist)<10
-                set(lh2,'XData',p(1,1),'YData',p(1,2),'Marker','+','Color','r');
+                pindex=find(dist==min(dist),1);
+                %move the selected point to the end
+                gate=circshift(gate, -pindex, 2);
+
+                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
                 set(gcf,'Pointer','fleur')
                 set(gcf,'WindowButtonDownFcn',@btndownedit);
             else
+                p=get(ah,'CurrentPoint');
+                newp(1,1)=min(max(p(1,1),values(1)),values(2));
+                newp(2,1)=min(max(p(1,2),values(3)),values(4));
+                newgate=[gate newp];
+                set(lh,'XData',newgate(1,:),'YData',newgate(2,:),'Marker','.','Color','r');
+                set(lh,'XData',[newgate(1,:),newgate(1,1)],'YData',[newgate(2,:),newgate(2,1)],'Marker','.','Color','r');
                 set(gcf,'Pointer','arrow')
                 set(gcf,'WindowButtonDownFcn',@btndownadd);
                 set(gcf,'WindowButtonUpFcn','');
@@ -6067,6 +5938,7 @@ end
         end
         function btndownedit(src,evnt)
             if strcmp(get(src,'SelectionType'),'alt')
+                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
                 set(src,'WindowButtonDownFcn','')
                 set(src,'WindowButtonUpFcn','')
                 set(src,'WindowButtonMotionFcn','')
@@ -6078,7 +5950,9 @@ end
                 ydist=(gate(2,:)-p(1,2))/neary;
                 dist=xdist.^2+ydist.^2;
                 pindex=find(dist==min(dist),1);
-                gate=gate(:,[1:pindex-1,pindex+1:end]);
+                %move the selected point to the end and remove
+                gate=circshift(gate, -pindex, 2);
+                gate(:,end)=[];
                 set(gcf,'WindowButtonMotionFcn',@movepoint);
                 set(gcf,'WindowButtonUpFcn',@btnupedit);
                 set(gcf,'WindowButtonDownFcn','');
@@ -6086,6 +5960,7 @@ end
         end
         function btndownadd(src,evnt)
             if strcmp(get(src,'SelectionType'),'alt')
+                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
                 set(src,'WindowButtonDownFcn','')
                 set(src,'WindowButtonUpFcn','')
                 set(src,'WindowButtonMotionFcn','')
@@ -6135,6 +6010,12 @@ function gate=gate2d_cntr(gate,data,datay,gatecoly,outcol)
 %   create ptope for the data ploted in gca
 %gate2d(gate)
 %   edit the gate given with the data plotted in gca
+
+WBDF = get(gcf,'WindowButtonDownFcn');
+WBUF = get(gcf,'WindowButtonUpFcn');
+WBMF = get(gcf,'WindowButtonMotionFcn');
+pntr = get(gcf,'Pointer');
+
 switch nargin
     case 0
         gate=gate2d_create;
@@ -6142,6 +6023,10 @@ switch nargin
         gate=gate2d_create(gate);
 end
 
+set(gcf,'WindowButtonDownFcn', WBDF);
+set(gcf,'WindowButtonUpFcn', WBUF);
+set(gcf,'WindowButtonMotionFcn', WBMF);
+set(gcf,'Pointer', pntr);
 
     function gate=gate2d_create(gate)
         %first get all data oints from current axis
