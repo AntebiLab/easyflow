@@ -148,7 +148,7 @@ set(fh,'Visible','on');
         db.Display.smoothprm=100;
         
         db.DBInfo.Path=pwd;
-        db.DBInfo.geom.Graphsize=100;
+        db.DBInfo.geom.Graphsize=200;
         db.DBInfo.geom.Gatesize=120;
         
         db.Statistics.ShowInStatView=[true(1,5),false(1,4)];
@@ -158,7 +158,7 @@ set(fh,'Visible','on');
         %%  Construct the figure
         scrsz=get(0,'ScreenSize');
         guisize=700;
-        Handles.fh=figure('Position',[(scrsz(3)-800)/2,(scrsz(4)-700)/2,800,700],...
+        Handles.fh=figure('Position',[(scrsz(3)-1000)/2,(scrsz(4)-700)/2,1000,700],...
             'MenuBar','none',...
             'Name','EasyFlow - FACS Analysis Tool',...
             'NumberTitle','off',...
