@@ -148,7 +148,7 @@ set(fh,'Visible','on');
         db.Display.smoothprm=100;
         
         db.DBInfo.Path=pwd;
-        db.DBInfo.geom.Graphsize=160;
+        db.DBInfo.geom.Graphsize=150;
         db.DBInfo.geom.Gatesize=120;
         
         db.Statistics.ShowInStatView=[true(1,5),false(1,4)];
