@@ -846,7 +846,7 @@ set(fh,'Visible','on');
                 tubeidx=arrayfun(@(x) find(strcmp([efdb.TubeDB.Tubename],x),1,'first'), {efdb.GraphDB(efdb.curGraph).Data});
                 allparname=[efdb.TubeDB(tubeidx).parname];
                 [allparname,m,n]=unique(allparname(:),'first');
-                apearencenum=histcounts(n,1:length(allparname));
+                apearencenum=histcounts(n,0.5+(0:length(allparname)));
                 %take all param that appear in all tubes and sort them according to
                 %their apearence order
                 parname=allparname(apearencenum==length(efdb.curGraph));
@@ -1282,9 +1282,9 @@ set(fh,'Visible','on');
         set(fh,'pointer','watch');
         mArgsIn=guidata(fh);
         if isfield(mArgsIn,'DBInfo') && isfield(mArgsIn.DBInfo,'Path') && ischar(mArgsIn.DBInfo.Path) && exist(mArgsIn.DBInfo.Path,'dir')
-            [filename,dirname]=uigetfile('*.fcs','Open Tubes',mArgsIn.DBInfo.Path,'MultiSelect','on');
+            [filename,dirname]=uigetfile({'*.fcs';'*.xlsx'},'Open Tubes',mArgsIn.DBInfo.Path,'MultiSelect','on');
         else
-            [filename,dirname]=uigetfile('*.fcs','Open Tubes',pwd,'MultiSelect','on');
+            [filename,dirname]=uigetfile({'*.fcs';'*.xlsx'},'Open Tubes',pwd,'MultiSelect','on');
         end
         if ischar(dirname) && exist(dirname,'dir')
             mArgsIn.DBInfo.Path=dirname;
@@ -1301,7 +1301,8 @@ set(fh,'Visible','on');
             if ~exist([dirname char(curfile)],'file')
                 continue
             end
-            fcsfile=fcsload([dirname char(curfile)]);
+            % use here file load, to either open fcs or xlsx files
+            fcsfile=fileload([dirname char(curfile)]);
             if isempty(fcsfile)
                 continue
             end
@@ -1444,7 +1445,7 @@ set(fh,'Visible','on');
         if ok==1
             % remove it from the TubeDB structures
             mArgsIn.TubeDB=mArgsIn.TubeDB(setdiff(1:length(S),Selection));
-            if isfield(mArgsIn,'GatesDB')
+            if isfield(mArgsIn,'GatesDB') && ~isempty(mArgsIn.GatesDB)
                 mArgsIn.GatesDB=rmfield(mArgsIn.GatesDB,intersect(matlab.lang.makeValidName(S(Selection)),fieldnames(mArgsIn.GatesDB)));
             end
             mArgsIn.TubeNames=[{'None'};[mArgsIn.TubeDB.Tubename]'];
@@ -3310,7 +3311,7 @@ set(fh,'Visible','on');
         Tube.fcsfile=[];
         %who calls this function? FileLoadCallback, Tube menu->Load...
         Tube.Tubename=fcsfile.var_value(strcmp(fcsfile.var_name,'TUBE NAME'));
-        if isempty(Tube.Tubename) && ~isempty(strfind(fcsfile.var_value{strcmp(fcsfile.var_name,'$CYT')},'MACSQuant'))
+        if isempty(Tube.Tubename) && any(strcmp(fcsfile.var_name,'$CYT')) && ~isempty(strfind(fcsfile.var_value{strcmp(fcsfile.var_name,'$CYT')},'MACSQuant'))
             Tube.Tubename=fcsfile.var_value(strcmp(fcsfile.var_name,'$CELLS'));
         end
         if isempty(Tube.Tubename)
@@ -3330,7 +3331,10 @@ set(fh,'Visible','on');
         end
         
         if any(strcmp(fcsfile.var_name,'SPILL'))
-            spill=textscan(fcsfile.var_value{strcmp(fcsfile.var_name,'SPILL')},'%s','delimiter', ',');
+            fcsfile.var_name{strcmp(fcsfile.var_name,'SPILL')} ='SPILL';
+        end
+        if any(strcmp(fcsfile.var_name,'$SPILLOVER'))%used to be SPILL in fcs3.0 should be this.
+            spill=textscan(fcsfile.var_value{strcmp(fcsfile.var_name,'$SPILLOVER')},'%s','delimiter', ',');
             spill=spill{1};
             mtxsize=str2double(spill{1});
             % The compenstaion parameters names
@@ -3368,35 +3372,50 @@ set(fh,'Visible','on');
     function efdb=abs2relpath(efdb)
         %change all tube paths to relative.
         %mostly effects efdb.TubeDB().tubepath
+        %
+        % find rel path for tubefiles from the session-file.
+        % the tubefiles folder would be [session-folder, relativepath]
         
-        if java.io.File(efdb.DBInfo.RootFolder).isAbsolute
-            rootdir=char(java.io.File(efdb.DBInfo.RootFolder).getCanonicalPath);
-        else
-            [DBInfodir ,~]=fileparts(efdb.DBInfo.Name);
-            rootdir=char(java.io.File([DBInfodir, filesep, efdb.DBInfo.RootFolder]).getCanonicalPath);
+        function relpath = a2r(root, target)
+            if root(1)~=target(1)
+                %they are in different drives
+                relpath=target;
+                return
+            end
+            [~,~,~,rootlist] = regexp(root,['\' filesep' '[^\' filesep ']+']);
+            [~,~,~,targetlist] = regexp(target,['\' filesep' '[^\' filesep ']+']);
+            
+            diff_level = 1;
+            for level=1:length(rootlist)
+                if strcmp(rootlist{level},targetlist{level})
+                    diff_level = diff_level+1;
+                else
+                    break
+                end
+            end
+            relpath='.';
+            for j=diff_level:length(rootlist)
+                relpath = [relpath, filesep, '..'];
+            end
+            for j=diff_level:length(targetlist)
+                relpath = [relpath, targetlist{j}];
+            end
         end
         
+        root = fileparts(efdb.DBInfo.Name);        
         for i=1:length(efdb.TubeDB)
-            if strfind(efdb.TubeDB(i).tubepath,rootdir)
-                efdb.TubeDB(i).tubepath = ...
-                    efdb.TubeDB(i).tubepath(length(rootdir)+1:end);
-            end
+            efdb.TubeDB(i).tubepath = ...
+                a2r(root, efdb.TubeDB(i).tubepath);
         end
     end
     function efdb=rel2abspath(efdb)
         %change all tube paths to absolute.
         %mostly effect efdb.TubeDB().tubepath
-        
-        if java.io.File(efdb.DBInfo.RootFolder).isAbsolute
-            rootdir=char(java.io.File(efdb.DBInfo.RootFolder).getCanonicalPath);
-        else
-            [DBInfodir ,~]=fileparts(efdb.DBInfo.Name);
-            rootdir=char(java.io.File([DBInfodir, filesep, efdb.DBInfo.RootFolder]).getCanonicalPath);
-        end
 
+        root = fileparts(efdb.DBInfo.Name);
         for i=1:length(efdb.TubeDB)
             efdb.TubeDB(i).tubepath = ...
-                char(java.io.File([rootdir filesep efdb.TubeDB(i).tubepath]).getCanonicalPath);
+                char(java.io.File([root filesep efdb.TubeDB(i).tubepath]).getCanonicalPath);
         end
     end
 
@@ -4614,6 +4633,17 @@ uiwait(h);
     end
 
 end
+function fcsfile = fileload(filename)
+
+[~, ~, ext] = fileparts(filename);
+
+if strcmp(ext, '.fcs')
+    fcsfile = fcsload(filename);
+elseif strcmp(ext, '.xlsx')
+    fcsfile = fcsload_xls(filename);
+end
+
+end
 function fcsfile = fcsload(filename)
 %edit and save fcs files
 %
@@ -4638,6 +4668,8 @@ else
     filename=[name ext];
     if ~isempty(pathname)
         cd(pathname);
+    else
+        pathname = pwd;
     end
 end
 
@@ -4848,6 +4880,100 @@ for index=1:length(fcsfile)
     fclose(fid);
     
 end
+
+cd(curdir);
+
+end
+function fcsfile = fcsload_xls(filename)
+%load fcs data from xls file
+%
+%fcsfile=fcsload_xls(filname)
+%   loads the file given and stores the data and metadata in the structure
+%   fcsfile
+
+
+curdir=pwd;
+
+%check inputs
+%TBD:if no input open a dialog
+if nargin==0
+    [filename,pathname] = uigetfile('*.xlsx','MultiSelect','on');
+    if isnumeric(filename)
+        error('No file to load.');
+    else
+        cd(pathname);
+    end
+else
+    [pathname, name, ext] = fileparts(filename);
+    filename=[name ext];
+    if ~isempty(pathname)
+        cd(pathname);
+    else
+        pathname=pwd;
+    end
+end
+
+if ~iscell(filename)
+    filename={filename};
+end
+
+%set outputs
+fcsfile(1:length(filename))=struct;
+
+for index=1:length(filename)
+    curfile=filename{index};
+    %open file
+    if exist(curfile,'file') && ~exist(curfile,'dir')
+        [num, txt] = xlsread(curfile);
+    else
+        error(['File ',curfile,' does not exist.'])
+    end
+    
+    [~, name, ~] = fileparts(curfile);
+    fcsfilename = [name, '.fcs'];
+    
+    %
+    fcsdata = single(num);
+    var_name = {'$BEGINANALYSIS', '$BEGINDATA', '$BEGINSTEXT', '$BYTEORD', ...
+        '$DATATYPE', '$ENDANALYSIS', '$ENDDATA', '$ENDSTEXT', '$MODE', ...
+        '$NEXTDATA', '$PAR'}';
+    var_value = {'58', '0', '0', '1,2,3,4', ...
+        'F', '0', '0', '0', 'L', ...
+        '0', num2str(size(txt,2))}';
+    
+    for pnum = 1:size(txt,2)
+        pstr = num2str(pnum);
+        var_name = [var_name; {['$P' pstr 'B'], ['$P' pstr 'E'], ['$P' pstr 'N'], ['$P' pstr 'R']}'];
+        var_value = [var_value; {'32', '0,0', num2str(txt{1,pnum}), '4294967296'}'];
+    end
+    var_name = [var_name; {'$TOT'}];
+    var_value = [var_value; num2str(size(num,1))];
+    
+    % Empty headers. will be generated in saving the file.
+    fcsheader = '';
+    Offsets = [58,0,0,0,0,0]';
+    fcstext = '';
+    fcsanalysis = '00000000';
+    seperator = '/';
+
+
+    
+    %output
+    fcsfile(index).fcsheader=fcsheader;
+    fcsfile(index).Offsets=Offsets;
+    fcsfile(index).fcstext=fcstext;
+    fcsfile(index).seperator=seperator;
+    fcsfile(index).var_name=var_name;
+    fcsfile(index).var_value=var_value;
+    fcsfile(index).fcsdata=fcsdata;
+    fcsfile(index).fcsanalysis=fcsanalysis;
+    fcsfile(index).filename=fcsfilename;
+    fcsfile(index).dirname=pathname;
+    
+end
+
+%save the files as fcs
+fcssave(fcsfile);
 
 cd(curdir);
 
