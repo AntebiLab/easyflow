@@ -760,7 +760,7 @@ set(fh,'Visible','on');
     end
     function ColorBtnCallback(hObject,~)
         efdb=efdb_load(hObject);
-        color=colorui;
+        color=uisetcolor;
         if ~isscalar(color)
             [efdb.GraphDB(efdb.curGraph).PlotColor]=deal(color);
         end
