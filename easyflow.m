@@ -524,24 +524,27 @@ set(fh,'Visible','on');
     end
 
     function fhResizeFcn(hObject,~)
-
         
         efdb=efdb_load(hObject);
         guipos=get(hObject,'Position');
-        Graphsize=efdb.DBInfo.geom.Graphsize;
-        Gatesize=efdb.DBInfo.geom.Gatesize;
 
         set(hObject,'Position',guipos);
-        set(efdb.Handles.GraphList,'Position',[0, 0, uipos_graphPanelWidth, guipos(4)-uipos_graphPanelTopDist]);
-        set(efdb.Handles.AddBtn,'Position',[0, guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
-        set(efdb.Handles.DelBtn,'Position',[floor(uipos_graphPanelWidth/2), guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
-        set(efdb.Handles.TopPanel,'Position',[uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, uipos_topPanelHeight]);
-        set(efdb.Handles.GateList,'Position',[guipos(3)-uipos_rightPanelWidth, uipos_figpropPanelHeight, uipos_rightPanelWidth, guipos(4)-uipos_figpropPanelHeight]);
-        set(efdb.Handles.FigPropPanel,'Position',[guipos(3)-uipos_rightPanelWidth, 0, uipos_rightPanelWidth, uipos_figpropPanelHeight]);
-
-        set(efdb.Handles.ax,'OuterPosition',[uipos_graphPanelWidth, 0, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight]);
         
-        efdb_save(efdb);
+        try
+            set(efdb.Handles.GraphList,'Position',[0, 0, uipos_graphPanelWidth, guipos(4)-uipos_graphPanelTopDist]);
+            set(efdb.Handles.AddBtn,'Position',[0, guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
+            set(efdb.Handles.DelBtn,'Position',[floor(uipos_graphPanelWidth/2), guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
+            set(efdb.Handles.TopPanel,'Position',[uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, uipos_topPanelHeight]);
+            set(efdb.Handles.GateList,'Position',[guipos(3)-uipos_rightPanelWidth, uipos_figpropPanelHeight, uipos_rightPanelWidth, guipos(4)-uipos_figpropPanelHeight]);
+            set(efdb.Handles.FigPropPanel,'Position',[guipos(3)-uipos_rightPanelWidth, 0, uipos_rightPanelWidth, uipos_figpropPanelHeight]);
+
+            set(efdb.Handles.ax,'OuterPosition',[uipos_graphPanelWidth, 0, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight]);
+
+            efdb_save(efdb);
+            
+        catch resizeError
+        end
+        
         %redraw the gates in the gate list
         UpdateGateList(efdb);
     end
