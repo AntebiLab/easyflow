@@ -24,6 +24,8 @@ uipos_topPanelHeight = 100;
 uipos_rightPanelWidth = 200;
 uipos_figpropPanelHeight = 400;
 
+
+
 %% written by Yaron Antebi
 curversion=3.20;
 versiondate='Feb 02, 2020';
@@ -169,7 +171,8 @@ set(fh,'Visible','on');
         Handles=[];
         %%  Construct the figure
         scrsz=get(0,'ScreenSize');
-        Handles.fh=figure('Position',[scrsz(3)*.15,(scrsz(4)-720)/2, 1080, 720],...
+        guisize=700;
+        Handles.fh=figure('Position',[scrsz(3) * .15,(scrsz(4)-700)/2,1080,720],...
             'MenuBar','none',...
             'Name','EasyFlow - FACS Analysis Tool',...
             'NumberTitle','off',...
