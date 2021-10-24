@@ -26,7 +26,6 @@ uipos_figpropPanelHeight = 400;
 
 %% written by Yaron Antebi
 curversion = easierFlowInfo('version');
-% versiondate='Feb 02, 2020';
 
 % Initialize 
 fh = init_gui();
