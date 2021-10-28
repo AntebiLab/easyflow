@@ -14,9 +14,18 @@ function easyflow(varargin)
 % remove the use of fh in functions
 % remove the use of mArgs
 
-%written by Yaron Antebi
-curversion=3.20;
-versiondate='Feb 02, 2020';
+%Addpath to the function files
+addpath(genpath('./funcs'));
+
+%% Key UI params (in pixels)
+uipos_graphPanelTopDist = 30;
+uipos_graphPanelWidth = 150;
+uipos_topPanelHeight = 100;
+uipos_rightPanelWidth = 200;
+uipos_figpropPanelHeight = 400;
+
+%% written by Yaron Antebi
+curversion = easierFlowInfo('version');
 
 % Initialize 
 fh = init_gui();
@@ -32,133 +41,11 @@ end
 %  Render GUI visible
 set(fh,'Visible','on');
 
-%%  Initialization functions
-    function db=init_efdb()
-        % Initialize data structures
-        % General DB Info
-        % it creates a data structure, mArgs with the following fields
-        %    version - double - the version
-        %    TubeDB - array of structures Tubes information.
-        %       fcsfile - structure containing the parsed fcsfile
-        %       Tubename - 1x1 cell containing a string with the tube name
-        %       CompensationMtx
-        %       CompensationIndex
-        %       CompensationPrm
-        %       parname
-        %       parsymbol
-        %       tubepath
-        %       tubefile
-        %       compdata - (num of cell X num of colors) Array of compensated data
-        %    Handles - all the gui handles.
-        %       GateList - handle to the uibuttongroup of the gates
-        %    GraphDB
-        %       Name
-        %       Data - String - name of the data tube
-        %       Ctrl - String - name of the control tube
-        %       Color - String - name of color for x axis
-        %       Color2 - String - name of color for y axis
-        %       RemoveCtrl - integer
-        %       DataDeconv
-        %       Gates
-        %       Stat - structure to hold statistics
-        %           quad - double array of length 2 with the position of the quadrants
-        %           quadp - double array of length 4 with the percentage of cells in each quad
-        %       plotdata - array of plotted data, [y(:), x(:)]
-        %       PlotColor - [r g b] - the color for the graph
-        %       Display
-        %           Changed - 0 or 1 - should i save the display in the graphdb
-        %       gatedindex - logical for the events that pass the combined gates
-        %       gatedindexctrl - logical for the events that pass the gates in the control tube
-        %       fit - 4x1 cell - cell array with 4 values. results of a fit operation (cfit), goodness of fit (structure), axis scaling, axis scaling param.
-        %    GatesDB
-        %       getvarname(tube)
-        %          gatename - cell array of {[gate_definition] [logical] [color1/defining element] [color2/type] }
-        %    Display - parameters for the display
-        %       GraphColor: [7x3 double]
-        %       graph_type: 'Dot Plot'
-        %       graph_type_Radio: 4
-        %       graph_Xaxis: 'logicle'
-        %       graph_Xaxis_param: [-1000 1000000 0.0251188643150958]
-        %       graph_Xaxis_Radio: 1
-        %       graph_Yaxis: 'ylin'
-        %       graph_Yaxis_param: [0 1000000 1]
-        %       graph_Yaxis_Radio: 4
-        %       Changed - 0 or 1 - should i save the display in the graphdb
-        %       histnormalize: 'Total'
-        %    TubeNames - cell array of strings containing the name of all tubes.
-        %                with 'None' as the first.
-        %    Statistics - parameters to do with statistics
-        %       ShowInStatView=logicals indicating which tests to do
-        %    copy
-        %    curGraph
-        %    DBInfo - data for saving things
-        %       Name
-        %       Path - String - path where to open file dialogs
-        %       RootFolder - String - path to a base folder for relative paths
-        %       isChanged - 0,1 - should the file be saved
-        %       geom - the geometry of the figure
-        %           Graphsize - the size of the Graph pane
-        %           Gatesize - the size of the Gates pane
-        %       enabled_gui - enabled gui components
-        %
-        %
-        
-        db=struct(...
-            'version',curversion,...
-            'TubeDB',[],...
-            'Handles',[],...
-            'GraphDB',[],...
-            'GatesDB',[],...
-            'GatesDBnew',struct(),...
-            'Display',[],...
-            'TubeNames',{'None'},...
-            'Statistics',[],...
-            'copy',[],...
-            'curGraph',[],...
-            'DBInfo',[]...
-            );
-        
-        db.TubeDB=struct(...
-            'fcsfile',{},...
-            'Tubename',{},...
-            'tubepath',{},...
-            'tubefile',{},...
-            'parname',{},...
-            'parsymbol',{},...
-            'CompensationPrm',{},...
-            'CompensationMtx',{},...
-            'CompensationIndex',{},...
-            'compdata',{});
-        
-        db.Display.GraphColor=[0,   0,   1;
-            0,   0.5, 0;
-            1,   0,   0;
-            0,   0.75,0.75;
-            0.75,0,   0.75;
-            0.75,0.75,0;
-            0.25,0.25,0.25];
-        db.Display.graph_type='Histogram';
-        db.Display.graph_type_Radio=5;
-        db.Display.graph_Xaxis='log';
-        db.Display.graph_Xaxis_param=[0 Inf 1];
-        db.Display.graph_Xaxis_Radio=3;
-        db.Display.graph_Yaxis='ylin';
-        db.Display.graph_Yaxis_param=1;
-        db.Display.graph_Yaxis_Radio=4;
-        db.Display.smoothprm=100;
-        
-        db.DBInfo.Path=pwd;
-        db.DBInfo.geom.Graphsize=100;
-        db.DBInfo.geom.Gatesize=120;
-        
-        db.Statistics.ShowInStatView=[true(1,5),false(1,4)];
-    end
     function fh=init_gui
         Handles=[];
         %%  Construct the figure
         scrsz=get(0,'ScreenSize');
-        guisize=700;
-        Handles.fh=figure('Position',[(scrsz(3)-800)/2,(scrsz(4)-700)/2,800,700],...
+        Handles.fh=figure('Position',[scrsz(3)*.15,(scrsz(4)-720)/2, 1080, 720],...
             'MenuBar','none',...
             'Name','EasyFlow - FACS Analysis Tool',...
             'NumberTitle','off',...
@@ -171,7 +58,6 @@ set(fh,'Visible','on');
         %%  Construct the UI regions
         uicontrol(Handles.fh,...
             'Style','listbox',...
-            'Position',[0 0 100 guisize-30],...
             'Max',2,...
             'Tag','GraphList',...
             'Value',[],...
@@ -179,31 +65,30 @@ set(fh,'Visible','on');
             'Callback',@GraphListCallback);
         uicontrol(Handles.fh,...
             'Style','pushbutton',...
-            'Position',[0 guisize-30 50 30],...
             'String','Add',...
             'Tag','AddBtn',...
             'CreateFcn',@GeneralCreateFcn,...
             'Callback',@AddBtnCallback);
         uicontrol(Handles.fh,...
             'Style','pushbutton',...
-            'Position',[50 guisize-30 50 30],...
             'String','Del',...
             'Tag','DelBtn',...
             'CreateFcn',@GeneralCreateFcn,...
             'Callback',@DelBtnCallback);
         uipanel(Handles.fh,...
             'Units','pixels',...
-            'Position',[100,guisize-100,guisize-200,100],...
             'Tag','TopPanel',...
             'CreateFcn',@GeneralCreateFcn);
         uibuttongroup(...
             'Units','pixels',...
-            'Position',[guisize-120 0 120 guisize],...
             'Tag','GateList',...
+            'CreateFcn',@GeneralCreateFcn);
+        uipanel(Handles.fh,...
+            'Units','pixels',...
+            'Tag','FigPropPanel',...
             'CreateFcn',@GeneralCreateFcn);
         axes('Parent',Handles.fh,...
             'Units','pixels',...
-            'OuterPosition',[100,0,guisize-100,guisize-100],...
             'Tag','ax',...
             'CreateFcn',@GeneralCreateFcn);
         %%  Construct the top panel
@@ -513,24 +398,29 @@ set(fh,'Visible','on');
         end
  
     end
+
     function fhResizeFcn(hObject,~)
+        
         efdb=efdb_load(hObject);
         guipos=get(hObject,'Position');
-        Graphsize=efdb.DBInfo.geom.Graphsize;
-        Gatesize=efdb.DBInfo.geom.Gatesize;
-        %guisize x must include the graphs, gates, and 450 for the top_panel
-        %guisize y must include the top_panel+a bit for the axis
-        guisizex=max(Graphsize+Gatesize+450,guipos(3));
-        guisizey=max(100+10,guipos(4));
-        guipos=[guipos(1),guipos(2)+guipos(4)-guisizey,guisizex,guisizey];
+
         set(hObject,'Position',guipos);
-        set(efdb.Handles.GraphList,'Position',[0 0 Graphsize guisizey-30]);
-        set(efdb.Handles.AddBtn,'Position',[0 guisizey-30 floor(Graphsize/2) 30]);
-        set(efdb.Handles.DelBtn,'Position',[floor(Graphsize/2) guisizey-30 ceil(Graphsize/2) 30]);
-        set(efdb.Handles.TopPanel,'Position',[Graphsize,guisizey-100,guisizex-Graphsize-Gatesize,100]);
-        set(efdb.Handles.GateList,'Position',[guisizex-Gatesize 0 Gatesize guisizey]);
-        set(efdb.Handles.ax,'OuterPosition',[Graphsize 0 guisizex-Graphsize-Gatesize,guisizey-100]);
-        efdb_save(efdb);
+        
+        try
+            set(efdb.Handles.GraphList,'Position',[0, 0, uipos_graphPanelWidth, guipos(4)-uipos_graphPanelTopDist]);
+            set(efdb.Handles.AddBtn,'Position',[0, guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
+            set(efdb.Handles.DelBtn,'Position',[floor(uipos_graphPanelWidth/2), guipos(4)-uipos_graphPanelTopDist, floor(uipos_graphPanelWidth/2), uipos_graphPanelTopDist]);
+            set(efdb.Handles.TopPanel,'Position',[uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, uipos_topPanelHeight]);
+            set(efdb.Handles.GateList,'Position',[guipos(3)-uipos_rightPanelWidth, uipos_figpropPanelHeight, uipos_rightPanelWidth, guipos(4)-uipos_figpropPanelHeight]);
+            set(efdb.Handles.FigPropPanel,'Position',[guipos(3)-uipos_rightPanelWidth, 0, uipos_rightPanelWidth, uipos_figpropPanelHeight]);
+
+            set(efdb.Handles.ax,'OuterPosition',[uipos_graphPanelWidth, 0, guipos(3)-uipos_rightPanelWidth-uipos_graphPanelWidth, guipos(4)-uipos_topPanelHeight]);
+
+            efdb_save(efdb);
+            
+        catch resizeError
+        end
+        
         %redraw the gates in the gate list
         UpdateGateList(efdb);
     end
@@ -760,7 +650,7 @@ set(fh,'Visible','on');
     end
     function ColorBtnCallback(hObject,~)
         efdb=efdb_load(hObject);
-        color=colorui;
+        color=uisetcolor;
         if ~isscalar(color)
             [efdb.GraphDB(efdb.curGraph).PlotColor]=deal(color);
         end
@@ -2868,8 +2758,8 @@ set(fh,'Visible','on');
         both=both(:)';
 %        if isempty(unselected), unselected=[]; end
         delete(get(mArgsIn.Handles.GateList,'Children'))
-        guipos=get(mArgsIn.Handles.fh,'Position');
-        guisizey=guipos(4);
+        guipos=get(mArgsIn.Handles.GateList,'Position');
+%         guisizey=guipos(4);
         pos=1;
         %first put the selected gates by the order of their selection
         for item=selected
@@ -2877,7 +2767,7 @@ set(fh,'Visible','on');
                 'Style','checkbox',...
                 'String',[allGates{item}],...
                 'Tag',allGates{item},...
-                'Position',[5 guisizey-5-20*pos 110 20],...
+                'Position',[5 guipos(4)-5-20*pos guipos(3)-5 20],...
                 'Value',1,...
                 'Callback',@GateListCallback,...
                 'UIContextMenu', mArgsIn.Handles.GatesCM);
@@ -2892,7 +2782,7 @@ set(fh,'Visible','on');
                 'Style','checkbox',...
                 'String',allGates{item},...
                 'Tag',allGates{item},...
-                'Position',[5 guisizey-5-20*pos 110 20],...
+                'Position',[5 guipos(4)-5-20*pos guipos(3)-5 20],...
                 'Value',1,...
                 'ForegroundColor',[1 0 0],...
                 'FontAngle','italic',...
@@ -2906,7 +2796,7 @@ set(fh,'Visible','on');
                 'Style','checkbox',...
                 'String',allGates{item},...
                 'Tag',allGates{item},...
-                'Position',[5 guisizey-5-20*pos 110 20],...
+                'Position',[5 guipos(4)-5-20*pos guipos(3)-5 20],...
                 'Value',0,...
                 'Callback',@GateListCallback,...
                 'UIContextMenu', mArgsIn.Handles.GatesCM);
@@ -2920,7 +2810,7 @@ set(fh,'Visible','on');
                     'Style','checkbox',...
                     'String',allGates{item},...
                     'Tag',allGates{item},...
-                    'Position',[5 guisizey-5-20*pos 110 20],...
+                    'Position',[5 guisizey-5-20*pos guipos(3)-5 20],...
                     'Value',0,...
                     'Callback',@GateListCallback,...
                     'UIContextMenu', mArgsIn.Handles.GatesCM);
@@ -4544,441 +4434,6 @@ set(fh,'Visible','on');
     end
 end
 
-function fcsfile = fcsedit(fcsfile)
-
-h=figure('MenuBar','none'...
-    ,'Name','EasyFlow - Edit FCS File'...
-    ,'NumberTitle','off'...
-    );
-
-righticn(:,:,1)=NaN.*ones(16,16);
-righticn(:,:,2)=NaN.*ones(16,16);
-righticn(:,:,3)=NaN.*ones(16,16);
-
-righticn(7:10,2:10,2)=0.5;
-righticn(4:13,11,2)=0.5;
-righticn(5:12,12,2)=0.5;
-righticn(6:11,13,2)=0.5;
-righticn(7:10,14,2)=0.5;
-righticn(8:9,15,2)=0.5;
-
-righticn(:,:,1)=rem(1,~isnan(righticn(:,:,2)));
-righticn(:,:,3)=rem(1,~isnan(righticn(:,:,2)));
-
-th = uitoolbar(h);
-uipushtool(th,'CData',righticn(:,end:-1:1,:),...
-           'TooltipString','My push tool',...
-           'HandleVisibility','off',...
-           'ClickedCallback',@nextfile);
-uipushtool(th,'CData',righticn,...
-           'TooltipString','My push tool',...
-           'HandleVisibility','off',...
-           'ClickedCallback',@prevfile);
-
-
-
-pos=get(h,'position');
-pos(1:2)=[1 1];
-table=uitable(h,...
-    'Position',pos,...
-    'ColumnEditable',logical([0,1]),...
-    'ColumnName',{'Variable','Value'},...
-    'ColumnWidth',{0,0},...
-    'CellEditCallback',@changeparam);
-
-
-
-index=1;
-loadparam;
-uiwait(h);
-
-    function loadparam()
-        set(table,'Data',[fcsfile(index).var_name,fcsfile(index).var_value])
-        set(table,'ColumnWidth',{0,0})
-        get(table,'Extent');
-        floor((pos(3)-ans(3)-16)/2);
-        set(table,'ColumnWidth',{ans,ans})
-    end
-    function changeparam(hObject,eventdata)
-        data=get(table,'Data');
-        %recalc the data starting position
-        datastart=256 ...header size
-            +1+length(data)*2+length([data{:}]) ...text size
-            +5;%fill
-        dataend=datastart+length(fcsfile(index).fcsdata)*4-1;
-        
-        data{strcmp(data(:,1),'$BEGINDATA'),2}=int2str(datastart);
-        %enddata is padded to 19 chars
-        tmp=char({'1234567890123456789';num2str(dataend)});
-        data{strcmp(data(:,1),'$ENDDATA'),2}=tmp(2,:);
-        fcsfile(index).Offsets(3)=datastart;
-        fcsfile(index).Offsets(4)=dataend;
-        %check that these changes don't change the sizes of the sections.
-        if datastart~=256 ...header size
-                +1+length(data)*2+length([data{:}]) ...text size
-                +5 ...%fill
-                || dataend~=datastart+length(fcsfile(index).fcsdata)*4-1
-            changeparam(hObject,eventdata);
-        end
-        fcsfile(index).var_name=data(:,1);
-        fcsfile(index).var_value=data(:,2);
-    end
-    function nextfile(hObject,eventData)
-        index=mod(index,length(fcsfile))+1;
-        loadparam;
-    end
-    function prevfile(hObject,eventData)
-        index=mod(index-2,length(fcsfile))+1;
-        loadparam;
-    end
-
-end
-function fcsfile = fileload(filename)
-
-[~, ~, ext] = fileparts(filename);
-
-if strcmp(ext, '.fcs')
-    fcsfile = fcsload(filename);
-elseif strcmp(ext, '.xlsx')
-    fcsfile = fcsload_xls(filename);
-end
-
-end
-function fcsfile = fcsload(filename)
-%edit and save fcs files
-%
-%fcsfile=fcsload(filname)
-%   loads the file given and stores the data and metadata in the structure
-%   fcsfile
-
-
-curdir=pwd;
-
-%check inputs
-%TBD:if no input open a dialog
-if nargin==0
-    [filename,pathname] = uigetfile('*.fcs','MultiSelect','on');
-    if isnumeric(filename)
-        error('No file to load.');
-    else
-        cd(pathname);
-    end
-else
-    [pathname, name, ext] = fileparts(filename);
-    filename=[name ext];
-    if ~isempty(pathname)
-        cd(pathname);
-    else
-        pathname = pwd;
-    end
-end
-
-if ~iscell(filename)
-    filename={filename};
-end
-
-%set outputs
-fcsfile(1:length(filename))=struct;
-
-for index=1:length(filename)
-    curfile=filename{index};
-    %open file
-    if exist(curfile,'file') && ~exist(curfile,'dir')
-        fid = fopen(curfile,'r','b');
-    else
-        error(['File ',curfile,' does not exist.'])
-    end
-    fseek(fid,0,'bof');
-    
-    %read the header
-    fcsheader=fread(fid,58,'*char')';
-    %check version is FCS3.0
-    if ~strcmp(fcsheader(1:6),'FCS3.0')
-        %error('Not an FCS3.0 file');
-    end
-    %get the offsets for the different sections
-    %TBD: if offset is 0 it might be stated in the text section
-    Offsets=str2num(reshape(fcsheader(11:end),8,6)'); %#ok<ST2NM>
-    
-    %read text section
-    fseek(fid,Offsets(1),'bof');
-    fcstext=fread(fid,Offsets(2)-Offsets(1)+1,'*char')';
-    %parse text section
-    if strcmp('\',fcstext(1))
-        %TBR 20150605 parsedtext=textscan(fcstext(2:end),'%s','delimiter',['\' fcstext(1)],'Whitespace','','bufsize',length(fcstext));
-        parsedtext=textscan(fcstext(2:end),'%s','delimiter',['\' fcstext(1)],'Whitespace','','EndOfLine','');
-    else
-        parsedtext=textscan(fcstext(2:end),'%s','delimiter',fcstext(1),'Whitespace','','EndOfLine','');
-    end
-    var_name=parsedtext{1}(1:2:end);
-    var_value=parsedtext{1}(2:2:end);
-    if length(var_value)<length(var_name)
-        var_name(end)=[];
-    end
-    %read data section
-    %floor is since some FACSs gives the EOF as the end of the data
-    %section.
-    if strcmp(var_value(strcmp(var_name,'$DATATYPE')),'I')
-        switch var_value{strcmp(var_name,'$P1B')}
-            case '16'
-                fmt='uint16';
-                psize=2;
-            case '32'
-                fmt='uint32';
-                psize=4;
-        end
-    else
-        fmt='single';
-        psize=4;
-    end
-    fseek(fid,Offsets(3),'bof');
-    fcsdata=[];
-    if Offsets(3)==0
-        Offsets(3)=str2double(var_value(strcmp(var_name,'$BEGINDATA')));
-    end
-    if Offsets(4)==0
-        Offsets(4)=str2double(var_value(strcmp(var_name,'$ENDDATA')));
-    end
-    if Offsets(3)~=Offsets(4) 
-        if strcmp(var_value(strcmp(var_name,'$BYTEORD')),'1,2,3,4')
-            m = memmapfile(curfile,'Offset',Offsets(3),'Format',fmt,'Repeat',floor((Offsets(4)-Offsets(3)+1)/psize));
-            fcsdata=m.data;
-        else
-            m = memmapfile(curfile,'Offset',Offsets(3),'Format',fmt,'Repeat',floor((Offsets(4)-Offsets(3)+1)/psize));
-            fcsdata=swapbytes(m.data);
-        end
-    elseif Offsets(3)==0
-    end
-
-    %assume no analysis section
-    fcsanalysis='00000000';
-    
-    %output
-    fcsfile(index).fcsheader=fcsheader;
-    fcsfile(index).Offsets=Offsets;
-    fcsfile(index).fcstext=fcstext;
-    fcsfile(index).seperator=fcstext(1);
-    fcsfile(index).var_name=var_name;
-    fcsfile(index).var_value=var_value;
-    mtxdata=reshape(single(fcsdata),...
-        str2double(fcsfile(index).var_value{strcmp(fcsfile(index).var_name,'$PAR')}),...
-        str2double(fcsfile(index).var_value{strcmp(fcsfile(index).var_name,'$TOT')}))';
-    fcsfile(index).fcsdata=mtxdata;
-    fcsfile(index).fcsanalysis=fcsanalysis;
-    fcsfile(index).filename=curfile;
-    fcsfile(index).dirname=pathname;
-    %close file
-    fclose(fid);
-    
-end
-cd(curdir);
-
-end
-function fcsfile = fcssetparam(fcsfile,parname,parval)
-%fcsfile=fcssetparam(fcsfile,parname,parval)
-
-for index=1:length(fcsfile)
-    id=strcmp(fcsfile(index).var_name,parname);
-    if sum(id)==1
-        fcsfile(index).var_value{id}=parval;
-    else
-        fcsfile(index).var_name{end+1}=parname;
-        fcsfile(index).var_value{end+1}=parval;
-    end
-end
-end
-function fcssave(fcsfile,overwrite) %#ok<INUSD>
-%edit and save fcs files
-%fcssave(fcsfile,overwrite)
-% fcsfile - structure with the fcsfile data
-% overwrite - if exist, overwrite without asking. value is ignored.
-
-%use the structure:
-% fcsfile
-%   var_name
-%   var_value
-%   fcsdata
-%   Offsets
-%   dirname
-%   filename
-
-curdir=pwd;
-
-for index=1:length(fcsfile)
-    
-    %filename=fcsfile(index).var_value{strcmp(fcsfile(index).var_name,'$FIL')};
-    %TBD: what to do if no $FIL exist.
-    filename=fcsfile(index).filename;
-    if exist(fcsfile(index).dirname,'dir')
-        cd(fcsfile(index).dirname)
-    elseif ~isempty(fcsfile(index).dirname)
-        error(['Directory ' fcsfile(index).dirname ' does not exist.'])
-    end
-    
-    %open file
-    if exist('overwrite','var') || ~exist(filename,'file')
-        fid = fopen(filename,'w','b');
-    else
-        button = questdlg('File already exist. Overwrite?','FCS Save','No');
-        if ~strcmp(button,'Yes')
-            continue;
-        else
-            fid = fopen(filename,'w','b');
-        end
-    end
-    fseek(fid,0,'bof');
-    
-    %verify offsets
-    datastart=fcsfile(index).Offsets(3);
-    dataend=fcsfile(index).Offsets(4);
-    %recalc the data start and end position and the test end position
-    while datastart~=256 ...header size
-            +1+length(fcsfile(index).var_value)*2+length([fcsfile(index).var_value{:}])+length([fcsfile(index).var_name{:}]) ...text size
-            +5 ...%fill
-            || dataend~=datastart+length(fcsfile(index).fcsdata(:))*4-1
-        datastart=256 ...header size
-            +1+length(fcsfile(index).var_value)*2+length([fcsfile(index).var_value{:}])+length([fcsfile(index).var_name{:}]) ...text size
-            +5;%fill
-        dataend=datastart+length(fcsfile(index).fcsdata(:))*4-1;
-        fcsfile(index).var_value{strcmp(fcsfile(index).var_name,'$BEGINDATA')}=int2str(datastart);
-        %enddata is padded to 19 chars
-        tmp=char({'1234567890123456789';num2str(dataend)});
-        fcsfile(index).var_value{strcmp(fcsfile(index).var_name,'$ENDDATA')}=tmp(2,:);
-        fcsfile(index).Offsets(2)=datastart-6;
-        fcsfile(index).Offsets(3)=datastart;
-        fcsfile(index).Offsets(4)=dataend;
-    end
-    
-    
-    %remake the text section
-    tmp=[fcsfile(index).var_name,fcsfile(index).var_value]';
-    sep=cell(size(tmp(:)));
-    [sep{:}]=deal(fcsfile(index).seperator);
-    tmp=[tmp(:),sep]';
-    fcsfile(index).fcstext=[fcsfile(index).seperator,[tmp{:}]];
-    
-    %remake the header section
-    tmp=[char(' '.*ones(6,8-size(num2str(fcsfile(index).Offsets),2))),num2str(fcsfile(index).Offsets)]';
-    fcsfile(index).fcsheader=['FCS3.0    ',tmp(:)'];
-    
-    %write the header
-    fwrite(fid,fcsfile(index).fcsheader,'*char');
-    %write text section
-    fwrite(fid,' '*ones(fcsfile(index).Offsets(1)-ftell(fid),1),'*char');
-    fwrite(fid,fcsfile(index).fcstext,'*char');
-    %write data section
-    fwrite(fid,' '*ones(fcsfile(index).Offsets(3)-ftell(fid),1),'*char');
-    if strcmp(fcsfile(index).var_value(strcmp(fcsfile(index).var_name,'$BYTEORD')),'1,2,3,4')
-        fwrite(fid,fcsfile(index).fcsdata','float32',0,'l');
-    else
-        fwrite(fid,fcsfile(index).fcsdata','float32',0,'b');
-    end
-    %write analysis section
-    %assumes no such section
-    fwrite(fid,fcsfile(index).fcsanalysis,'*char');
-    
-    fclose(fid);
-    
-end
-
-cd(curdir);
-
-end
-function fcsfile = fcsload_xls(filename)
-%load fcs data from xls file
-%
-%fcsfile=fcsload_xls(filname)
-%   loads the file given and stores the data and metadata in the structure
-%   fcsfile
-
-
-curdir=pwd;
-
-%check inputs
-%TBD:if no input open a dialog
-if nargin==0
-    [filename,pathname] = uigetfile('*.xlsx','MultiSelect','on');
-    if isnumeric(filename)
-        error('No file to load.');
-    else
-        cd(pathname);
-    end
-else
-    [pathname, name, ext] = fileparts(filename);
-    filename=[name ext];
-    if ~isempty(pathname)
-        cd(pathname);
-    else
-        pathname=pwd;
-    end
-end
-
-if ~iscell(filename)
-    filename={filename};
-end
-
-%set outputs
-fcsfile(1:length(filename))=struct;
-
-for index=1:length(filename)
-    curfile=filename{index};
-    %open file
-    if exist(curfile,'file') && ~exist(curfile,'dir')
-        [num, txt] = xlsread(curfile);
-    else
-        error(['File ',curfile,' does not exist.'])
-    end
-    
-    [~, name, ~] = fileparts(curfile);
-    fcsfilename = [name, '.fcs'];
-    
-    %
-    fcsdata = single(num);
-    var_name = {'$BEGINANALYSIS', '$BEGINDATA', '$BEGINSTEXT', '$BYTEORD', ...
-        '$DATATYPE', '$ENDANALYSIS', '$ENDDATA', '$ENDSTEXT', '$MODE', ...
-        '$NEXTDATA', '$PAR'}';
-    var_value = {'58', '0', '0', '1,2,3,4', ...
-        'F', '0', '0', '0', 'L', ...
-        '0', num2str(size(txt,2))}';
-    
-    for pnum = 1:size(txt,2)
-        pstr = num2str(pnum);
-        var_name = [var_name; {['$P' pstr 'B'], ['$P' pstr 'E'], ['$P' pstr 'N'], ['$P' pstr 'R']}'];
-        var_value = [var_value; {'32', '0,0', num2str(txt{1,pnum}), '4294967296'}'];
-    end
-    var_name = [var_name; {'$TOT'}];
-    var_value = [var_value; num2str(size(num,1))];
-    
-    % Empty headers. will be generated in saving the file.
-    fcsheader = '';
-    Offsets = [58,0,0,0,0,0]';
-    fcstext = '';
-    fcsanalysis = '00000000';
-    seperator = '/';
-
-
-    
-    %output
-    fcsfile(index).fcsheader=fcsheader;
-    fcsfile(index).Offsets=Offsets;
-    fcsfile(index).fcstext=fcstext;
-    fcsfile(index).seperator=seperator;
-    fcsfile(index).var_name=var_name;
-    fcsfile(index).var_value=var_value;
-    fcsfile(index).fcsdata=fcsdata;
-    fcsfile(index).fcsanalysis=fcsanalysis;
-    fcsfile(index).filename=fcsfilename;
-    fcsfile(index).dirname=pathname;
-    
-end
-
-%save the files as fcs
-fcssave(fcsfile);
-
-cd(curdir);
-
-end
-
 function GraphDB=fcsbatch(inGraphDB,str1,str2)
 %str1 is the string to be replaced
 %str 2 is a char array
@@ -5799,507 +5254,5 @@ colorlist=parname(usedcolors);
 compmat=fcscompensate(singledata);
 end
 
-
-function gate=gate1d(gate,data,gatecol,outcol)
-%GATE1D create and edit a one dimensional gate for facs measurments.
-%   GATE=GATE1D
-%   GATE is [min max height] values for the gate. the user need to click on two
-%   points (the min and the max). right click uses Inf.
-%
-%gate1d
-%   create ptope for the data ploted in gca
-%gate1d(gate)
-%   edit the gate given with the data plotted in gca
-%gate1d(gate,data)
-%   filters the data according to the gate returns logical places where the
-%   data passed the gate
-%gate1d(gate,data,gatecol)
-%   filters the data in column gatecol according to the gate returns 
-%   logical places where the data passed the gate
-%gate1d(gate, data, gatecol, outcol)
-%   return the data in column outcol whenever the data in gatecol passes
-%   the gate.
-
-WBDF = get(gcf,'WindowButtonDownFcn');
-WBUF = get(gcf,'WindowButtonUpFcn');
-WBMF = get(gcf,'WindowButtonMotionFcn');
-pntr = get(gcf,'Pointer');
-
-switch nargin
-    case 0
-        gate=gate1d_create;
-    case 1
-        gate=gate1d_create(gate);
-    case 2
-        gate=gate1d_apply(gate,data);
-    case 3
-        gate=gate1d_apply(gate,data(:,gatecol));
-    case 4
-        gatelogical=gate1d_apply(gate,data(:,gatecol));
-        gate=data(gatelogical,outcol);
-end
-
-set(gcf,'WindowButtonDownFcn', WBDF);
-set(gcf,'WindowButtonUpFcn', WBUF);
-set(gcf,'WindowButtonMotionFcn', WBMF);
-set(gcf,'Pointer', pntr);
-
-    function gate=gate1d_create(gate)
-        lh=line('Visible','off');
-        ah=gca;
-        values=axis;
-        nearx=0.01*(values(2)-values(1));
-        neary=0.01*(values(4)-values(3));
-        editid=0;
-        
-        switch nargin
-            case 0
-                xdat=[];
-                ydat=[];
-                set(gcf,'WindowButtonDownFcn',@btndown)
-                set(gcf,'WindowButtonUpFcn','')
-                set(gcf,'WindowButtonMotionFcn','')
-                set(gcf,'Pointer','crosshair')
-            case 1
-                editid=1;
-                xdat=gate(1:2);
-                ydat=[gate(3),gate(3)];
-                set(lh,'XData',xdat,'YData',ydat,'Marker','+','Color','r','Visible','on');
-                set(gcf,'WindowButtonMotionFcn',@selectchange)
-                set(gcf,'WindowButtonUpFcn','')
-                set(gcf,'WindowButtonDownFcn',@exitfcn)
-        end
-        uiwait;
-        
-        gate=[min(xdat),max(xdat),ydat(1)];
-        
-        function btndown(src,evnt)
-            p=get(ah,'CurrentPoint');
-            if strcmp(get(src,'SelectionType'),'normal')
-                xdat = p(1,1);
-                ydat = p(1,2);
-                set(lh,'XData',xdat,'YData',ydat,'Marker','+','Color','r','Visible','on');
-                set(src,'WindowButtonMotionFcn',@move)
-                set(gcf,'WindowButtonUpFcn',@btnup)
-            end
-            
-        end
-        function btnup(src,evnt)
-            p=get(ah,'CurrentPoint');
-            if strcmp(get(src,'SelectionType'),'normal')
-                xdat = [xdat,p(1,1)];
-                ydat = [ydat,ydat];
-                set(lh,'XData',xdat,'YData',ydat,'Marker','+','Color','r');
-                set(gcf,'WindowButtonMotionFcn',@selectchange)
-            end
-            if editid==0
-                set(src,'WindowButtonDownFcn','')
-                set(src,'WindowButtonMotionFcn','')
-                set(src,'Pointer','Arrow')
-                uiresume;
-            end
-            set(src,'WindowButtonUpFcn','')
-        end
-        function move(src,evnt)
-            p=get(ah,'CurrentPoint');
-            set(lh,'XData',[xdat,min(max(p(1,1),values(1)),values(2))],'YData',[ydat,ydat],'Marker','+','Color','r');
-        end
-        function clickchange(src,evnt)
-            p=get(ah,'CurrentPoint');
-            if strcmp(get(src,'SelectionType'),'normal')
-                if abs(p(1,1)-xdat(1)) < abs(p(1,1)-xdat(2))
-                    xdat=xdat(2);
-                else
-                    xdat=xdat(1);
-                end
-                ydat = ydat(1);
-                set(lh,'XData',[xdat,min(max(p(1,1),values(1)),values(2))],'YData',[ydat,ydat],'Marker','+','Color','r');
-                set(src,'WindowButtonMotionFcn',@move)
-                set(gcf,'WindowButtonUpFcn',@btnup)
-            end
-            
-        end
-        function selectchange(src,evnt)
-            p=get(ah,'CurrentPoint');
-            if abs(p(1,1)-xdat(1)) < abs(p(1,1)-xdat(2)) && abs(p(1,1)-xdat(1)) < nearx && abs(p(1,2)-ydat(1)) < neary
-                set(gcf,'WindowButtonDownFcn',@clickchange)
-                set(gcf,'Pointer','left')
-            elseif abs(p(1,1)-xdat(1)) > abs(p(1,1)-xdat(2)) && abs(p(1,1)-xdat(2)) < nearx && abs(p(1,2)-ydat(2)) < neary
-                set(gcf,'WindowButtonDownFcn',@clickchange)
-                set(gcf,'Pointer','right')
-            else
-                set(gcf,'WindowButtonDownFcn',@exitfcn)
-                set(gcf,'Pointer','Arrow')
-            end
-            
-        end
-        function exitfcn(src,evnt)
-            if strcmp(get(src,'SelectionType'),'alt')
-                set(src,'WindowButtonDownFcn','')
-                set(src,'WindowButtonUpFcn','')
-                set(src,'WindowButtonMotionFcn','')
-                uiresume;
-            end
-        end
-    end
-    function gatelogical=gate1d_apply(gate,data)
-        
-        gatelogical=and(data>gate(1),data<gate(2));
-        
-    end
-end
-function gate=gate2d(gate,data,datay,gatecoly,outcol)
-%GATE2D create a two dimensional gate for facs measurments.
-%   GATE=GATE2D
-%   Uses the current plot to define a two dimensional gate.
-%   GATE is the points surounding the convex area that should be gated.
-%   GATE=GATE2D(ptope) edit the gate defined by ptope
-%
-%gate2d
-%   create ptope for the data ploted in gca
-%gate2d(gate)
-%   edit the gate given with the data plotted in gca
-%gate2d(gate,datax,datay)
-%   filters the data according to the gate. returns logical places where
-%   the data passed the gate
-%gate2d(gate,data,gatecolx,gatecoly)
-%   filters the data in the columns specified according to the gate.
-%   returns logical places where the data passed the gate
-%gate2d(gate, data, gatecolx, gatecoly, outcol)
-%   returns the data in column outcol whenever the data in gatecolx,
-%   gatecoly passes the gate.
-
-WBDF = get(gcf,'WindowButtonDownFcn');
-WBUF = get(gcf,'WindowButtonUpFcn');
-WBMF = get(gcf,'WindowButtonMotionFcn');
-pntr = get(gcf,'Pointer');       
-
-switch nargin
-    case 0
-        gate=gate2d_create;
-    case 1
-        gate=gate2d_create(gate);
-    case 3
-        gate=gate2d_apply(gate,data,datay);
-    case 4
-        gate=gate2d_apply(gate,data(:,datay),data(:,gatecoly));
-    case 5
-        gatelogical=gate2d_apply(gate,data(:,datay),data(:,gatecoly));
-        gate=data(gatelogical,outcol);
-end
-
-set(gcf,'WindowButtonDownFcn', WBDF);
-set(gcf,'WindowButtonUpFcn', WBUF);
-set(gcf,'WindowButtonMotionFcn', WBMF);
-set(gcf,'Pointer', pntr);
-
-
-    function gate=gate2d_create(gate)
-        lh=line('Visible','off');
-        ah=gca;
-        values=axis;
-        nearx=0.01*(values(2)-values(1));
-        neary=0.01*(values(4)-values(3));
-        
-        switch nargin
-            case 0
-                gate=[];
-                set(gcf,'WindowButtonDownFcn',@btndown)
-                set(gcf,'Pointer','crosshair')
-            case 1
-                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r','Visible','on');
-                set(gcf,'WindowButtonMotionFcn',@selectchange)
-        end
-        uiwait;
-        %functions for creating new gate
-        function btndown(src,evnt)
-            p=get(ah,'CurrentPoint');
-            if strcmp(get(src,'SelectionType'),'normal')
-                gate(1,end+1) = p(1,1);
-                gate(2,end) = p(1,2);
-                %2010dec gate=makehull(gate);
-                set(lh,'XData',gate(1,:),'YData',gate(2,:),'Marker','.','Color','r','Visible','on');
-                set(src,'WindowButtonMotionFcn',@move)
-            elseif strcmp(get(src,'SelectionType'),'alt')
-                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
-                set(src,'WindowButtonDownFcn','')
-                set(src,'WindowButtonMotionFcn','')
-                set(src,'Pointer','Arrow')
-                uiresume;
-            end
-            
-        end
-        function move(src,evnt)
-            p=get(ah,'CurrentPoint');
-            newp(1,1)=min(max(p(1,1),values(1)),values(2));
-            newp(2,1)=min(max(p(1,2),values(3)),values(4));
-            newgate=[gate newp];
-            set(lh,'XData',newgate(1,:),'YData',newgate(2,:),'Marker','.','Color','r');
-        end
-        %functions for editing gate
-        function selectchange(src,evnt)
-            p=get(ah,'CurrentPoint');
-            xdist=(gate(1,:)-p(1,1))/nearx;
-            ydist=(gate(2,:)-p(1,2))/neary;
-            dist=xdist.^2+ydist.^2;
-            if min(dist)<10
-                pindex=find(dist==min(dist),1);
-                %move the selected point to the end
-                gate=circshift(gate, -pindex, 2);
-
-                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
-                set(gcf,'Pointer','fleur')
-                set(gcf,'WindowButtonDownFcn',@btndownedit);
-            else
-                p=get(ah,'CurrentPoint');
-                newp(1,1)=min(max(p(1,1),values(1)),values(2));
-                newp(2,1)=min(max(p(1,2),values(3)),values(4));
-                newgate=[gate newp];
-                set(lh,'XData',newgate(1,:),'YData',newgate(2,:),'Marker','.','Color','r');
-                set(lh,'XData',[newgate(1,:),newgate(1,1)],'YData',[newgate(2,:),newgate(2,1)],'Marker','.','Color','r');
-                set(gcf,'Pointer','arrow')
-                set(gcf,'WindowButtonDownFcn',@btndownadd);
-                set(gcf,'WindowButtonUpFcn','');
-            end
-        end
-        function btndownedit(src,evnt)
-            if strcmp(get(src,'SelectionType'),'alt')
-                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
-                set(src,'WindowButtonDownFcn','')
-                set(src,'WindowButtonUpFcn','')
-                set(src,'WindowButtonMotionFcn','')
-                set(src,'Pointer','Arrow')
-                uiresume;
-            else
-                p=get(ah,'CurrentPoint');
-                xdist=(gate(1,:)-p(1,1))/nearx;
-                ydist=(gate(2,:)-p(1,2))/neary;
-                dist=xdist.^2+ydist.^2;
-                pindex=find(dist==min(dist),1);
-                %move the selected point to the end and remove
-                gate=circshift(gate, -pindex, 2);
-                gate(:,end)=[];
-                set(gcf,'WindowButtonMotionFcn',@movepoint);
-                set(gcf,'WindowButtonUpFcn',@btnupedit);
-                set(gcf,'WindowButtonDownFcn','');
-            end
-        end
-        function btndownadd(src,evnt)
-            if strcmp(get(src,'SelectionType'),'alt')
-                set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
-                set(src,'WindowButtonDownFcn','')
-                set(src,'WindowButtonUpFcn','')
-                set(src,'WindowButtonMotionFcn','')
-                set(src,'Pointer','Arrow')
-                uiresume;
-            else
-                set(gcf,'WindowButtonMotionFcn',@movepoint);
-                set(gcf,'WindowButtonUpFcn',@btnupedit);
-                set(gcf,'WindowButtonDownFcn','');
-            end
-        end
-        function movepoint(src,evnt)
-            p=get(ah,'CurrentPoint');
-            newp(1,1)=min(max(p(1,1),values(1)),values(2));
-            newp(2,1)=min(max(p(1,2),values(3)),values(4));
-            %2010dec newgate=makehull([gate newp]);
-            newgate=[gate newp];
-            set(lh,'XData',[newgate(1,:),newgate(1,1)],'YData',[newgate(2,:),newgate(2,1)],'Marker','.','Color','r');
-        end
-        function btnupedit(src,evnt)
-            p=get(ah,'CurrentPoint');
-            newp(1,1)=min(max(p(1,1),values(1)),values(2));
-            newp(2,1)=min(max(p(1,2),values(3)),values(4));
-            %2010dec gate=makehull([gate newp]);
-            gate=[gate newp];
-            set(lh,'XData',[gate(1,:),gate(1,1)],'YData',[gate(2,:),gate(2,1)],'Marker','.','Color','r');
-            set(gcf,'WindowButtonMotionFcn',@selectchange);
-            set(gcf,'WindowButtonDownFcn',@btndownedit);
-            set(gcf,'WindowButtonUpFcn','');
-        end
-        
-    end
-    function gate=gate2d_apply(gate,datax,datay)
-        gate=inpolygon(datax,datay,gate(1,:),gate(2,:));
-    end
-end
-function gate=gate2d_cntr(gate,data,datay,gatecoly,outcol)
-%GATE2D create a two dimensional gate for facs measurments using the contours.
-%   GATE=GATE2D_cntr
-%   Uses the current plot to define a two dimensional gate based on a
-%   density contour plot.
-%   You can click to select a contour line or use arrows to move it
-%   up/down. Hold the shift key to finely adjust. To choose right click
-%   within the contour.
-%
-%gate2d
-%   create ptope for the data ploted in gca
-%gate2d(gate)
-%   edit the gate given with the data plotted in gca
-
-WBDF = get(gcf,'WindowButtonDownFcn');
-WBUF = get(gcf,'WindowButtonUpFcn');
-WBMF = get(gcf,'WindowButtonMotionFcn');
-pntr = get(gcf,'Pointer');
-
-switch nargin
-    case 0
-        gate=gate2d_create;
-    case 1
-        gate=gate2d_create(gate);
-end
-
-set(gcf,'WindowButtonDownFcn', WBDF);
-set(gcf,'WindowButtonUpFcn', WBUF);
-set(gcf,'WindowButtonMotionFcn', WBMF);
-set(gcf,'Pointer', pntr);
-
-    function gate=gate2d_create(gate)
-        %first get all data oints from current axis
-        xpt=get(findobj(gca,'Type','line'),'XData');
-        ypt=get(findobj(gca,'Type','line'),'YData');
-        if iscell(xpt)
-            xpt=[xpt{:}];
-        end
-        if iscell(ypt)
-            ypt=[ypt{:}];
-        end
-        %generate the log density matrix
-        [dm,xmesh,ymesh]=(density([xpt(:),ypt(:)]));
-        dm=log(dm);
-        hold on
-        [C,h]=contour(xmesh,ymesh,dm);
-        hold off
-        hv=line('Visible','off');
-        Cv=[];
-        dmv=min(dm(:));
-        
-        %some variables to be used later
-        stepsize=range(dm(:))/20;
-        dmax=max(dm(:));
-        dmin=min(dm(:));
-        ah=gca;
-        %make the boundaries minimal
-        dm(1,:)=dmin;
-        dm(end,:)=dmin;
-        dm(:,1)=dmin;
-        dm(:,end)=dmin;
-        
-        switch nargin
-            case 0
-                gate=[];
-                wbdf=get(gcf,'WindowButtonDownFcn');
-                wkpf=set(gcf,'WindowKeyPressFcn');
-                set(gcf,'Pointer','crosshair')
-                
-                set(gcf,'WindowButtonDownFcn',@btndown)
-                set(gcf,'WindowKeyPressFcn',@keypress)
-                set(gcf,'Pointer','crosshair')
-            case 1
-        end
-        uiwait;
-        
-        function btndown(src,evnt)
-            if strcmp(get(src,'SelectionType'),'normal')
-                %select specific contour
-                delete(hv);
-                p=get(ah,'CurrentPoint');
-                [xv,xv]=min(abs(xmesh(1,:)-p(1,1)));
-                [yv,yv]=min(abs(ymesh(:,1)-p(1,2)));
-                dmv=dm(yv,xv);
-                hold on
-                [Cv,hv]=contour(xmesh,ymesh,dm,[dmv,dmv]);
-                hold off
-                set(hv,'linewidth',3)
-                set(hv,'linecolor','k')
-            elseif strcmp(get(src,'SelectionType'),'alt')
-                %select the clicked contour
-                p=get(ah,'CurrentPoint');
-                idx=1;
-                csize=[];
-                while idx<size(Cv,2)
-                    csize(end+1,1)=idx+1;
-                    csize(end,2)=idx+Cv(2,idx);
-                    idx=idx+1+Cv(2,idx);
-                end
-                isin=[];
-                for i=1:size(csize,1)
-                    isin(i)=inpolygon(p(1,1),p(1,2),Cv(1,csize(i,1):csize(i,2)),Cv(2,csize(i,1):csize(i,2)));
-                end
-                if sum(isin)~=1
-                    %in more than one or on the boundary of two
-                    return
-                end
-                gate=Cv(:,csize(isin==1,1):csize(isin==1,2));
-                
-                
-                hold on
-                delete(h);
-                delete(hv);
-                plot(gate(1,:),gate(2,:),'r');
-                hold off
-                set(src,'WindowButtonDownFcn',wbdf)
-                set(gcf,'WindowKeyPressFcn',wkpf)
-                set(src,'Pointer','Arrow')
-                uiresume;
-            end
-            
-        end
-        function keypress(src,evnt)
-            if isempty(evnt.Modifier)
-                if strcmp(evnt.Key,'f1')
-                    %show help
-                    msgbox({'You can click to select a contour line or use arrows to move it up/down.',...
-                        'Hold the shift key to finely adjust.',...
-                        'To select - right click within the contour.'}...
-                        ,'EasyFlow','help','modal');
-                    uiwait;
-                end
-                if strcmp(evnt.Key,'uparrow')
-                    %move contour
-                    delete(hv);
-                    dmv=min(dmv+stepsize,dmax);
-                    hold on
-                    [Cv,hv]=contour(xmesh,ymesh,dm,[dmv,dmv]);
-                    hold off
-                    set(hv,'linewidth',3)
-                    set(hv,'linecolor','k')
-                end
-                if strcmp(evnt.Key,'downarrow')
-                    %move contour
-                    delete(hv);
-                    dmv=max(dmv-stepsize,dmin);
-                    hold on
-                    [Cv,hv]=contour(xmesh,ymesh,dm,[dmv,dmv]);
-                    hold off
-                    set(hv,'linewidth',3)
-                    set(hv,'linecolor','k')
-                end
-            end
-            if strcmp(evnt.Modifier,'shift')
-                if strcmp(evnt.Key,'uparrow')
-                    %move contour
-                    delete(hv);
-                    dmv=min(dmv+stepsize/20,dmax);
-                    hold on
-                    [Cv,hv]=contour(xmesh,ymesh,dm,[dmv,dmv]);
-                    hold off
-                    set(hv,'linewidth',3)
-                    set(hv,'linecolor','k')
-                end
-                if strcmp(evnt.Key,'downarrow')
-                    %move contour
-                    delete(hv);
-                    dmv=max(dmv-stepsize/20,dmin);
-                    hold on
-                    [Cv,hv]=contour(xmesh,ymesh,dm,[dmv,dmv]);
-                    hold off
-                    set(hv,'linewidth',3)
-                    set(hv,'linecolor','k')
-                end
-            end
-        end
-    end
-end
 
 
